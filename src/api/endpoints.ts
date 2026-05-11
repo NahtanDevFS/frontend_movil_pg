@@ -117,7 +117,7 @@ export const subirVideo = async (
   const res = await client.post("/procesamientos/", data, {
     headers: { "Content-Type": "multipart/form-data" },
     timeout: 300000, // 5 min para uploads grandes
-    onUploadProgress: (e) => {
+    onUploadProgress: (e: { loaded: number; total?: number }) => {
       if (onUploadProgress && e.total) {
         onUploadProgress(Math.round((e.loaded / e.total) * 100));
       }
