@@ -19,9 +19,16 @@
         "backgroundColor": "#2d6a4f"
       },
       "package": "com.amadeoexport.meloncount",
-      "permissions": ["READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"]
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
-    "plugins": ["expo-router", "expo-secure-store"],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-asset"
+    ],
     "scheme": "meloncount",
     "extra": {
       "apiUrl": "https://reluctant-smartly-muppet.ngrok-free.dev"
