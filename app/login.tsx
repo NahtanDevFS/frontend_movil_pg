@@ -11,6 +11,7 @@ import {
   Alert,
   ScrollView,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../src/context/AuthContext";
 
 export default function LoginScreen() {
@@ -48,41 +49,53 @@ export default function LoginScreen() {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Logo / encabezado */}
         <View style={styles.header}>
-          <View style={styles.logoBadge}>
-            <Text style={styles.logoEmoji}>🍈</Text>
+          <View style={styles.logoBox}>
+            <Ionicons name="leaf" size={32} color="#ffffff" />
           </View>
           <Text style={styles.appName}>MelonCount</Text>
           <Text style={styles.appSubtitle}>Amadeo Export S.A.</Text>
         </View>
 
-        {/* Formulario */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Iniciar sesión</Text>
 
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Usuario</Text>
-            <TextInput
-              style={styles.input}
-              value={nombre}
-              onChangeText={setNombre}
-              placeholder="Ej. juan.operador"
-              placeholderTextColor="#a0b5a8"
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-            />
+            <View style={styles.inputRow}>
+              <Ionicons
+                name="person-outline"
+                size={16}
+                color="#8fa898"
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                value={nombre}
+                onChangeText={setNombre}
+                placeholder="Nombre de usuario"
+                placeholderTextColor="#a0b5a8"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!loading}
+              />
+            </View>
           </View>
 
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Contraseña</Text>
-            <View style={styles.passwordRow}>
+            <View style={styles.inputRow}>
+              <Ionicons
+                name="lock-closed-outline"
+                size={16}
+                color="#8fa898"
+                style={styles.inputIcon}
+              />
               <TextInput
-                style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                style={[styles.input, { flex: 1 }]}
                 value={password}
                 onChangeText={setPassword}
-                placeholder="••••••••"
+                placeholder="Contraseña"
                 placeholderTextColor="#a0b5a8"
                 secureTextEntry={!mostrarPassword}
                 autoCapitalize="none"
@@ -92,9 +105,11 @@ export default function LoginScreen() {
                 onPress={() => setMostrarPassword((p) => !p)}
                 style={styles.eyeBtn}
               >
-                <Text style={styles.eyeText}>
-                  {mostrarPassword ? "🙈" : "👁️"}
-                </Text>
+                <Ionicons
+                  name={mostrarPassword ? "eye-off-outline" : "eye-outline"}
+                  size={18}
+                  color="#8fa898"
+                />
               </TouchableOpacity>
             </View>
           </View>
@@ -108,13 +123,13 @@ export default function LoginScreen() {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.btnText}>Entrar</Text>
+              <Text style={styles.btnText}>Iniciar sesión</Text>
             )}
           </TouchableOpacity>
         </View>
 
         <Text style={styles.footer}>
-          Solo para operadores de campo autorizados
+          Acceso exclusivo para operadores de campo
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -129,91 +144,71 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 48,
   },
-  header: {
-    alignItems: "center",
-    marginBottom: 32,
-  },
-  logoBadge: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
+  header: { alignItems: "center", marginBottom: 32 },
+  logoBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
     backgroundColor: "#2d6a4f",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 12,
-    shadowColor: "#2d6a4f",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    marginBottom: 14,
   },
-  logoEmoji: { fontSize: 36 },
   appName: {
-    fontSize: 26,
-    fontWeight: "800",
+    fontSize: 24,
+    fontWeight: "700",
     color: "#1a2e25",
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
-  appSubtitle: {
-    fontSize: 13,
-    color: "#5a7a6a",
-    marginTop: 2,
-  },
+  appSubtitle: { fontSize: 13, color: "#5a7a6a", marginTop: 3 },
   card: {
     backgroundColor: "#ffffff",
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 10,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: "#dde8e2",
   },
   cardTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
     color: "#1a2e25",
     marginBottom: 20,
   },
   fieldGroup: { marginBottom: 16 },
   label: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
-    color: "#3d5a4a",
+    color: "#5a7a6a",
     marginBottom: 6,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-  input: {
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#f4f7f5",
     borderWidth: 1.5,
     borderColor: "#dde8e2",
     borderRadius: 10,
-    padding: 12,
+    paddingHorizontal: 12,
+  },
+  inputIcon: { marginRight: 8 },
+  input: {
+    flex: 1,
+    paddingVertical: 12,
     fontSize: 15,
     color: "#1a2e25",
-    marginBottom: 4,
   },
-  passwordRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  eyeBtn: {
-    padding: 8,
-  },
-  eyeText: { fontSize: 18 },
+  eyeBtn: { padding: 4 },
   btn: {
     backgroundColor: "#2d6a4f",
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 14,
     alignItems: "center",
     marginTop: 8,
   },
   btnDisabled: { opacity: 0.6 },
-  btnText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 16,
-  },
+  btnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
   footer: {
     textAlign: "center",
     color: "#8fa898",

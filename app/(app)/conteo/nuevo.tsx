@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   TextInput,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import {
   getVariedades,
@@ -18,7 +19,7 @@ import {
   getProcesamientosPorConteo,
   subirVideo,
 } from "../../../src/api/endpoints";
-import { Variedad, Conteo, ProcesamientoVideo } from "../../../src/types";
+import { Variedad, Conteo } from "../../../src/types";
 
 export default function NuevoConteoScreen() {
   const router = useRouter();
@@ -28,12 +29,9 @@ export default function NuevoConteoScreen() {
   }>();
   const cultivoId = Number(cultivo_id);
 
-  // Estado del flujo
   const [paso, setPaso] = useState<"configurar" | "subir" | "subiendo">(
     "configurar",
   );
-
-  // Paso 1 — configurar
   const [variedades, setVariedades] = useState<Variedad[]>([]);
   const [variedadId, setVariedadId] = useState<number | null>(null);
   const [conteosAbiertos, setConteosAbiertos] = useState<Conteo[]>([]);
@@ -42,8 +40,6 @@ export default function NuevoConteoScreen() {
   );
   const [modoConteo, setModoConteo] = useState<"nuevo" | "existente">("nuevo");
   const [loadingConfig, setLoadingConfig] = useState(true);
-
-  // Paso 2 — subir video
   const [surcoInicio, setSurcoInicio] = useState("");
   const [surcoFin, setSurcoFin] = useState("");
   const [videoFile, setVideoFile] =
@@ -63,10 +59,8 @@ export default function NuevoConteoScreen() {
         ]);
         setVariedades(vars);
         if (vars.length > 0) setVariedadId(vars[0].id);
-
         const abiertos = conteos.filter((c) => c.estado_id !== 2);
         setConteosAbiertos(abiertos);
-
         if (conteo_id) {
           const existente = conteos.find((c) => c.id === Number(conteo_id));
           if (existente) {
@@ -101,8 +95,6 @@ export default function NuevoConteoScreen() {
       }
       setConteoSeleccionado(conteo);
       setTotalSurcos(conteo.total_surcos);
-
-      // Cargar surcos ya cubiertos
       const procs = await getProcesamientosPorConteo(conteo.id);
       const bloqueados = new Set<number>();
       procs.forEach((p) => {
@@ -118,43 +110,24 @@ export default function NuevoConteoScreen() {
     }
   };
 
-  const handleSeleccionarVideo = async () => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: "video/*",
-      copyToCacheDirectory: true,
-    });
-    if (!result.canceled && result.assets.length > 0) {
-      setVideoFile(result.assets[0]);
-    }
-  };
-
   const handleSubir = async () => {
     if (!conteoSeleccionado || !videoFile) return;
-
     const inicio = parseInt(surcoInicio);
     const fin = parseInt(surcoFin);
-
-    if (isNaN(inicio) || isNaN(fin) || fin < inicio) {
+    if (isNaN(inicio) || isNaN(fin) || fin < inicio)
       return Alert.alert(
         "Rango inválido",
         "El surco final debe ser mayor o igual al inicial.",
       );
-    }
-    if (fin > totalSurcos) {
+    if (fin > totalSurcos)
       return Alert.alert(
         "Rango inválido",
         `El surco final no puede superar ${totalSurcos}.`,
       );
-    }
     for (let s = inicio; s <= fin; s++) {
-      if (surcosBloqueados.has(s)) {
-        return Alert.alert(
-          "Solapamiento",
-          `El surco ${s} ya está cubierto por otro video.`,
-        );
-      }
+      if (surcosBloqueados.has(s))
+        return Alert.alert("Solapamiento", `El surco ${s} ya está cubierto.`);
     }
-
     setPaso("subiendo");
     try {
       const formData = new FormData();
@@ -167,55 +140,47 @@ export default function NuevoConteoScreen() {
         name: videoFile.name,
         type: videoFile.mimeType ?? "video/mp4",
       } as any);
-
       const proc = await subirVideo(formData, setUploadProgress);
-      // Ir al detalle del procesamiento (polling de resultado)
       router.replace(`/(app)/procesamiento/${proc.id}`);
     } catch (err: any) {
       setPaso("subir");
       Alert.alert(
         "Error al subir",
-        err.response?.data?.detail ??
-          "Verifica tu conexión e inténtalo de nuevo.",
+        err.response?.data?.detail ?? "Verifica tu conexión.",
       );
     }
   };
 
-  if (loadingConfig) {
+  if (loadingConfig)
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#2d6a4f" />
       </View>
     );
-  }
 
-  // ── Paso: subiendo ────────────────────────────────────────
   if (paso === "subiendo") {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#2d6a4f" />
-        <Text style={styles.uploadTitle}>Subiendo video...</Text>
+        <Text style={styles.uploadTitle}>Subiendo video</Text>
         <Text style={styles.uploadPct}>{uploadProgress}%</Text>
         <View style={styles.progressBar}>
           <View
             style={[styles.progressFill, { width: `${uploadProgress}%` }]}
           />
         </View>
-        <Text style={styles.uploadHint}>
-          No cierres la aplicación mientras se sube el video.
-        </Text>
+        <Text style={styles.uploadHint}>No cierres la aplicación.</Text>
       </View>
     );
   }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* ── Paso 1: Configurar ── */}
+      {/* PASO 1 — Configurar */}
       {paso === "configurar" && (
         <>
-          <Text style={styles.sectionTitle}>Configurar conteo</Text>
+          <Text style={styles.stepLabel}>Paso 1 de 2 — Configurar conteo</Text>
 
-          {/* Modo: nuevo o existente */}
           {conteosAbiertos.length > 0 && (
             <View style={styles.modeRow}>
               {(["existente", "nuevo"] as const).map((m) => (
@@ -240,9 +205,8 @@ export default function NuevoConteoScreen() {
             </View>
           )}
 
-          {/* Selección de conteo existente */}
           {modoConteo === "existente" && conteosAbiertos.length > 0 && (
-            <View style={styles.field}>
+            <View style={styles.fieldGroup}>
               <Text style={styles.label}>Conteo en progreso</Text>
               {conteosAbiertos.map((c) => (
                 <TouchableOpacity
@@ -253,24 +217,35 @@ export default function NuevoConteoScreen() {
                   ]}
                   onPress={() => setConteoSeleccionado(c)}
                 >
-                  <Text
-                    style={[
-                      styles.optionText,
-                      conteoSeleccionado?.id === c.id &&
-                        styles.optionTextActive,
-                    ]}
-                  >
-                    Conteo #{c.id} —{" "}
-                    {new Date(c.fecha_conteo).toLocaleDateString("es-GT")}
-                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.optionText,
+                        conteoSeleccionado?.id === c.id &&
+                          styles.optionTextActive,
+                      ]}
+                    >
+                      Conteo #{c.id}
+                    </Text>
+                    <Text style={styles.optionSub}>
+                      {new Date(c.fecha_conteo).toLocaleDateString("es-GT")} ·{" "}
+                      {c.conteo_total_acumulado.toLocaleString()} melones
+                    </Text>
+                  </View>
+                  {conteoSeleccionado?.id === c.id && (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={20}
+                      color="#2d6a4f"
+                    />
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
           )}
 
-          {/* Selección de variedad (solo nuevo) */}
           {modoConteo === "nuevo" && (
-            <View style={styles.field}>
+            <View style={styles.fieldGroup}>
               <Text style={styles.label}>Variedad de melón</Text>
               {variedades.map((v) => (
                 <TouchableOpacity
@@ -289,6 +264,13 @@ export default function NuevoConteoScreen() {
                   >
                     {v.nombre}
                   </Text>
+                  {variedadId === v.id && (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={20}
+                      color="#2d6a4f"
+                    />
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
@@ -299,111 +281,155 @@ export default function NuevoConteoScreen() {
             onPress={handleConfirmar}
             activeOpacity={0.85}
           >
-            <Text style={styles.btnPrimaryText}>Continuar →</Text>
+            <Text style={styles.btnPrimaryText}>Continuar</Text>
+            <Ionicons name="arrow-forward" size={16} color="#fff" />
           </TouchableOpacity>
         </>
       )}
 
-      {/* ── Paso 2: Subir video ── */}
+      {/* PASO 2 — Subir video */}
       {paso === "subir" && conteoSeleccionado && (
         <>
+          <Text style={styles.stepLabel}>Paso 2 de 2 — Subir video</Text>
+
           <View style={styles.conteoInfo}>
             <Text style={styles.conteoInfoLabel}>
               Conteo #{conteoSeleccionado.id}
             </Text>
-            <Text style={styles.conteoInfoSurcos}>
-              {surcosBloqueados.size}/{totalSurcos} surcos cubiertos
+            <Text style={styles.conteoInfoSub}>
+              {surcosBloqueados.size} de {totalSurcos} surcos cubiertos
             </Text>
           </View>
 
           {/* Mapa de surcos */}
-          <Text style={styles.sectionTitle}>Cobertura de surcos</Text>
-          <View style={styles.surcoGrid}>
-            {Array.from({ length: totalSurcos }, (_, i) => {
-              const n = i + 1;
-              const bloqueado = surcosBloqueados.has(n);
-              const inicio = parseInt(surcoInicio);
-              const fin = parseInt(surcoFin);
-              const enRango =
-                !isNaN(inicio) && !isNaN(fin) && n >= inicio && n <= fin;
-              const conflicto = bloqueado && enRango;
-              return (
-                <View
-                  key={n}
-                  style={[
-                    styles.surcoCell,
-                    bloqueado && !conflicto && styles.surcoCubierto,
-                    enRango && !conflicto && styles.surcoRango,
-                    conflicto && styles.surcoConflicto,
-                  ]}
-                >
-                  <Text
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Cobertura de surcos</Text>
+            <View style={styles.surcoGrid}>
+              {Array.from({ length: totalSurcos }, (_, i) => {
+                const n = i + 1;
+                const bloqueado = surcosBloqueados.has(n);
+                const inicio = parseInt(surcoInicio);
+                const fin = parseInt(surcoFin);
+                const enRango =
+                  !isNaN(inicio) && !isNaN(fin) && n >= inicio && n <= fin;
+                const conflicto = bloqueado && enRango;
+                return (
+                  <View
+                    key={n}
                     style={[
-                      styles.surcoCellText,
-                      bloqueado && styles.surcoCubiertText,
+                      styles.surcoCell,
+                      bloqueado && !conflicto && styles.surcoCubierto,
+                      enRango && !conflicto && styles.surcoRango,
+                      conflicto && styles.surcoConflicto,
                     ]}
                   >
-                    {n}
+                    <Text
+                      style={[
+                        styles.surcoCellText,
+                        (bloqueado || enRango) && styles.surcoCellTextActive,
+                      ]}
+                    >
+                      {n}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+            <View style={styles.surcoLegend}>
+              <View
+                style={[styles.legendDot, { backgroundColor: "#b7e4c7" }]}
+              />
+              <Text style={styles.legendText}>Cubierto</Text>
+              <View
+                style={[styles.legendDot, { backgroundColor: "#dcfce7" }]}
+              />
+              <Text style={styles.legendText}>Selección</Text>
+              <View
+                style={[styles.legendDot, { backgroundColor: "#fca5a5" }]}
+              />
+              <Text style={styles.legendText}>Conflicto</Text>
+            </View>
+          </View>
+
+          {/* Rango */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Rango de surcos</Text>
+            <View style={styles.rangoRow}>
+              <View style={styles.rangoField}>
+                <Text style={styles.rangoLabel}>Desde</Text>
+                <TextInput
+                  style={styles.rangoInput}
+                  value={surcoInicio}
+                  onChangeText={setSurcoInicio}
+                  keyboardType="number-pad"
+                  placeholder="1"
+                  placeholderTextColor="#a0b5a8"
+                />
+              </View>
+              <Ionicons
+                name="remove"
+                size={20}
+                color="#8fa898"
+                style={{ marginTop: 24 }}
+              />
+              <View style={styles.rangoField}>
+                <Text style={styles.rangoLabel}>Hasta</Text>
+                <TextInput
+                  style={styles.rangoInput}
+                  value={surcoFin}
+                  onChangeText={setSurcoFin}
+                  keyboardType="number-pad"
+                  placeholder={String(totalSurcos)}
+                  placeholderTextColor="#a0b5a8"
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Video */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Video del dron</Text>
+            <TouchableOpacity
+              style={styles.videoPicker}
+              onPress={async () => {
+                const result = await DocumentPicker.getDocumentAsync({
+                  type: "video/*",
+                  copyToCacheDirectory: true,
+                });
+                if (!result.canceled && result.assets.length > 0)
+                  setVideoFile(result.assets[0]);
+              }}
+            >
+              {videoFile ? (
+                <View style={styles.videoSelected}>
+                  <Ionicons name="videocam" size={20} color="#2d6a4f" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.videoNombre} numberOfLines={1}>
+                      {videoFile.name}
+                    </Text>
+                    {videoFile.size && (
+                      <Text style={styles.videoTamaño}>
+                        {(videoFile.size / 1024 / 1024).toFixed(1)} MB
+                      </Text>
+                    )}
+                  </View>
+                  <Ionicons name="checkmark-circle" size={20} color="#2d6a4f" />
+                </View>
+              ) : (
+                <View style={styles.videoEmpty}>
+                  <Ionicons
+                    name="cloud-upload-outline"
+                    size={28}
+                    color="#8fa898"
+                  />
+                  <Text style={styles.videoPickerText}>Seleccionar video</Text>
+                  <Text style={styles.videoPickerHint}>
+                    MP4, MOV — máx. recomendado 500 MB
                   </Text>
                 </View>
-              );
-            })}
+              )}
+            </TouchableOpacity>
           </View>
-
-          {/* Rango de surcos */}
-          <Text style={styles.sectionTitle}>Rango de surcos del video</Text>
-          <View style={styles.rangoRow}>
-            <View style={[styles.field, { flex: 1 }]}>
-              <Text style={styles.label}>Desde</Text>
-              <TextInput
-                style={styles.input}
-                value={surcoInicio}
-                onChangeText={setSurcoInicio}
-                keyboardType="number-pad"
-                placeholder="1"
-                placeholderTextColor="#a0b5a8"
-              />
-            </View>
-            <View style={[styles.field, { flex: 1 }]}>
-              <Text style={styles.label}>Hasta</Text>
-              <TextInput
-                style={styles.input}
-                value={surcoFin}
-                onChangeText={setSurcoFin}
-                keyboardType="number-pad"
-                placeholder={String(totalSurcos)}
-                placeholderTextColor="#a0b5a8"
-              />
-            </View>
-          </View>
-
-          {/* Selección de video */}
-          <Text style={styles.sectionTitle}>Video del dron</Text>
-          <TouchableOpacity
-            style={styles.videoPicker}
-            onPress={handleSeleccionarVideo}
-          >
-            {videoFile ? (
-              <View>
-                <Text style={styles.videoNombre} numberOfLines={1}>
-                  {videoFile.name}
-                </Text>
-                <Text style={styles.videoTamaño}>
-                  {videoFile.size
-                    ? `${(videoFile.size / 1024 / 1024).toFixed(1)} MB`
-                    : ""}
-                </Text>
-              </View>
-            ) : (
-              <>
-                <Text style={styles.videoIcon}>🎬</Text>
-                <Text style={styles.videoPickerText}>Seleccionar video</Text>
-                <Text style={styles.videoPickerHint}>
-                  MP4, MOV — máx. recomendado 500 MB
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
 
           <TouchableOpacity
             style={[
@@ -414,7 +440,8 @@ export default function NuevoConteoScreen() {
             disabled={!videoFile || !surcoInicio || !surcoFin}
             activeOpacity={0.85}
           >
-            <Text style={styles.btnPrimaryText}>Subir y procesar con IA ›</Text>
+            <Ionicons name="cloud-upload-outline" size={16} color="#fff" />
+            <Text style={styles.btnPrimaryText}>Subir y procesar con IA</Text>
           </TouchableOpacity>
         </>
       )}
@@ -429,26 +456,23 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    gap: 12,
+    gap: 14,
     padding: 32,
   },
-  sectionTitle: {
-    fontSize: 13,
+  stepLabel: {
+    fontSize: 12,
     fontWeight: "700",
-    color: "#3d5a4a",
+    color: "#8fa898",
     textTransform: "uppercase",
-    letterSpacing: 0.8,
+    letterSpacing: 0.5,
   },
-  field: { gap: 6 },
-  label: { fontSize: 13, fontWeight: "600", color: "#3d5a4a" },
-  input: {
-    backgroundColor: "#fff",
-    borderWidth: 1.5,
-    borderColor: "#dde8e2",
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 15,
-    color: "#1a2e25",
+  fieldGroup: { gap: 8 },
+  label: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#5a7a6a",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   modeRow: { flexDirection: "row", gap: 10 },
   modeBtn: {
@@ -460,20 +484,22 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     alignItems: "center",
   },
-  modeBtnActive: { backgroundColor: "#e8f5ee", borderColor: "#52b788" },
+  modeBtnActive: { backgroundColor: "#e8f5ee", borderColor: "#2d6a4f" },
   modeBtnText: { fontSize: 13, fontWeight: "600", color: "#5a7a6a" },
   modeBtnTextActive: { color: "#2d6a4f" },
   optionBtn: {
-    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
     borderRadius: 10,
     borderWidth: 1.5,
     borderColor: "#dde8e2",
     backgroundColor: "#fff",
-    marginTop: 4,
   },
-  optionBtnActive: { backgroundColor: "#e8f5ee", borderColor: "#52b788" },
-  optionText: { fontSize: 14, color: "#5a7a6a", fontWeight: "500" },
-  optionTextActive: { color: "#2d6a4f", fontWeight: "700" },
+  optionBtnActive: { backgroundColor: "#e8f5ee", borderColor: "#2d6a4f" },
+  optionText: { fontSize: 14, color: "#5a7a6a", fontWeight: "600", flex: 1 },
+  optionTextActive: { color: "#2d6a4f" },
+  optionSub: { fontSize: 12, color: "#8fa898", marginTop: 2 },
   conteoInfo: {
     backgroundColor: "#2d6a4f",
     borderRadius: 12,
@@ -483,11 +509,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   conteoInfoLabel: { color: "#fff", fontWeight: "700", fontSize: 14 },
-  conteoInfoSurcos: { color: "rgba(255,255,255,0.75)", fontSize: 12 },
+  conteoInfoSub: { color: "rgba(255,255,255,0.7)", fontSize: 12 },
   surcoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
   surcoCell: {
-    width: 32,
-    height: 32,
+    width: 30,
+    height: 30,
     borderRadius: 6,
     backgroundColor: "#e8eeeb",
     justifyContent: "center",
@@ -498,48 +524,64 @@ const styles = StyleSheet.create({
   surcoCubierto: { backgroundColor: "#b7e4c7", borderColor: "#52b788" },
   surcoRango: { backgroundColor: "#dcfce7", borderColor: "#86efac" },
   surcoConflicto: { backgroundColor: "#fee2e2", borderColor: "#fca5a5" },
-  surcoCellText: { fontSize: 10, fontWeight: "600", color: "#5a7a6a" },
-  surcoCubiertText: { color: "#2d6a4f" },
-  rangoRow: { flexDirection: "row", gap: 12 },
-  videoPicker: {
-    backgroundColor: "#fff",
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: "#dde8e2",
-    borderStyle: "dashed",
-    padding: 24,
+  surcoCellText: { fontSize: 9, fontWeight: "600", color: "#8fa898" },
+  surcoCellTextActive: { color: "#1a2e25" },
+  surcoLegend: {
+    flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
+    marginTop: 8,
   },
-  videoIcon: { fontSize: 32 },
-  videoPickerText: { fontSize: 15, fontWeight: "700", color: "#2d6a4f" },
-  videoPickerHint: { fontSize: 12, color: "#8fa898" },
-  videoNombre: {
-    fontSize: 14,
-    fontWeight: "700",
+  legendDot: { width: 10, height: 10, borderRadius: 3 },
+  legendText: { fontSize: 11, color: "#8fa898", marginRight: 8 },
+  rangoRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  rangoField: { flex: 1, gap: 6 },
+  rangoLabel: { fontSize: 12, fontWeight: "600", color: "#5a7a6a" },
+  rangoInput: {
+    backgroundColor: "#fff",
+    borderWidth: 1.5,
+    borderColor: "#dde8e2",
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
     color: "#1a2e25",
     textAlign: "center",
+    fontWeight: "700",
   },
-  videoTamaño: {
-    fontSize: 12,
-    color: "#5a7a6a",
-    textAlign: "center",
-    marginTop: 2,
+  videoPicker: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#dde8e2",
+    overflow: "hidden",
   },
+  videoEmpty: { padding: 28, alignItems: "center", gap: 6 },
+  videoSelected: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    gap: 12,
+  },
+  videoNombre: { fontSize: 14, fontWeight: "600", color: "#1a2e25" },
+  videoTamaño: { fontSize: 12, color: "#8fa898", marginTop: 2 },
+  videoPickerText: { fontSize: 14, fontWeight: "600", color: "#2d6a4f" },
+  videoPickerHint: { fontSize: 12, color: "#8fa898" },
   btnPrimary: {
     backgroundColor: "#2d6a4f",
-    borderRadius: 12,
-    padding: 15,
+    borderRadius: 10,
+    padding: 14,
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: 4,
+    justifyContent: "center",
+    gap: 8,
   },
   btnDisabled: { opacity: 0.4 },
-  btnPrimaryText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  btnPrimaryText: { color: "#fff", fontWeight: "700", fontSize: 15 },
   uploadTitle: { fontSize: 18, fontWeight: "700", color: "#1a2e25" },
-  uploadPct: { fontSize: 36, fontWeight: "800", color: "#2d6a4f" },
+  uploadPct: { fontSize: 40, fontWeight: "800", color: "#2d6a4f" },
   progressBar: {
     width: "80%",
-    height: 8,
+    height: 6,
     backgroundColor: "#dde8e2",
     borderRadius: 99,
     overflow: "hidden",
@@ -549,5 +591,5 @@ const styles = StyleSheet.create({
     backgroundColor: "#2d6a4f",
     borderRadius: 99,
   },
-  uploadHint: { fontSize: 12, color: "#8fa898", textAlign: "center" },
+  uploadHint: { fontSize: 12, color: "#8fa898" },
 });
