@@ -31,7 +31,11 @@
     ],
     "scheme": "meloncount",
     "extra": {
-      "apiUrl": "https://reluctant-smartly-muppet.ngrok-free.dev"
+      "apiUrl": "https://reluctant-smartly-muppet.ngrok-free.dev",
+      "router": {},
+      "eas": {
+        "projectId": "92b1d13b-241f-43a5-8a26-fa6385c55c23"
+      }
     }
   }
 }
