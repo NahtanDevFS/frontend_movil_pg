@@ -8,8 +8,10 @@ import {
   Variedad,
   Calibre,
 } from "../types";
+import * as FileSystem from "expo-file-system/legacy";
+import Constants from "expo-constants";
 
-// ── Auth ──────────────────────────────────────────────────────
+//Auth
 export const login = async (nombre: string, password: string) => {
   const params = new URLSearchParams();
   params.append("username", nombre);
@@ -25,13 +27,13 @@ export const getMe = async () => {
   return res.data;
 };
 
-// ── Cultivos ──────────────────────────────────────────────────
+//Cultivos
 export const getCultivos = async (): Promise<Cultivo[]> => {
   const res = await client.get("/cultivos/");
   return res.data;
 };
 
-// ── Catálogos ─────────────────────────────────────────────────
+//Catálogos
 export const getVariedades = async (): Promise<Variedad[]> => {
   const res = await client.get("/catalogos/variedades");
   return res.data;
@@ -44,7 +46,7 @@ export const getCalibresPorVariedad = async (
   return res.data;
 };
 
-// ── Conteos ───────────────────────────────────────────────────
+//Conteos
 export const getConteosPorCultivo = async (
   cultivoId: number,
 ): Promise<Conteo[]> => {
@@ -95,7 +97,7 @@ export const guardarMuestreo = async (
   return res.data;
 };
 
-// ── Procesamientos ────────────────────────────────────────────
+//Procesamientos
 export const getProcesamientosPorConteo = async (
   conteoId: number,
 ): Promise<ProcesamientoVideo[]> => {
@@ -110,20 +112,57 @@ export const getProcesamiento = async (
   return res.data;
 };
 
-export const subirVideo = async (
-  data: FormData,
-  onUploadProgress?: (pct: number) => void,
-): Promise<ProcesamientoVideo> => {
-  const res = await client.post("/procesamientos/", data, {
+//registra sin archivo, responde inmediatamente con el id
+export const registrarProcesamiento = async (data: {
+  conteo_id: number;
+  surco_inicio: number;
+  surco_fin: number;
+  fecha_grabacion: string;
+}): Promise<ProcesamientoVideo> => {
+  const form = new FormData();
+  form.append("conteo_id", String(data.conteo_id));
+  form.append("surco_inicio", String(data.surco_inicio));
+  form.append("surco_fin", String(data.surco_fin));
+  form.append("fecha_grabacion", data.fecha_grabacion);
+  const res = await client.post("/procesamientos/registrar", form, {
     headers: { "Content-Type": "multipart/form-data" },
-    timeout: 300000, // 5 min para uploads grandes
-    onUploadProgress: (e: { loaded: number; total?: number }) => {
-      if (onUploadProgress && e.total) {
-        onUploadProgress(Math.round((e.loaded / e.total) * 100));
-      }
-    },
   });
   return res.data;
+};
+
+//sube el archivo en background con expo-file-system
+export const subirVideoBackground = async (
+  procesamientoId: number,
+  videoUri: string,
+  token: string,
+  onProgress?: (pct: number) => void,
+): Promise<void> => {
+  const apiUrl = Constants.expoConfig?.extra?.apiUrl ?? "http://localhost:8000";
+  const uploadUrl = `${apiUrl}/procesamientos/${procesamientoId}/video`;
+
+  const task = FileSystem.createUploadTask(
+    uploadUrl,
+    videoUri,
+    {
+      httpMethod: "POST",
+      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+      fieldName: "video",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+    (progress) => {
+      if (onProgress && progress.totalBytesExpectedToSend > 0) {
+        const pct = Math.round(
+          (progress.totalBytesSent / progress.totalBytesExpectedToSend) * 100,
+        );
+        onProgress(pct);
+      }
+    },
+  );
+
+  const result = await task.uploadAsync();
+  if (!result || result.status >= 400) {
+    throw new Error("Error al subir el video.");
+  }
 };
 
 export const ajustarConteo = async (

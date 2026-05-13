@@ -7,6 +7,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Modal,
+  TextInput,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,6 +21,8 @@ import {
   completarConteo,
   getCultivos,
   getComparacionAnterior,
+  getCalibresPorVariedad,
+  guardarMuestreo,
 } from "../../../src/api/endpoints";
 import {
   Conteo,
@@ -26,6 +30,7 @@ import {
   MuestreoResponse,
   Cultivo,
   ComparacionAnterior,
+  Calibre,
 } from "../../../src/types";
 
 const CONF_BG: Record<string, string> = {
@@ -51,9 +56,14 @@ export default function ConteoDetalleScreen() {
   const [comparacion, setComparacion] = useState<ComparacionAnterior | null>(
     null,
   );
+  const [calibres, setCalibres] = useState<Calibre[]>([]);
   const [loading, setLoading] = useState(true);
   const [completando, setCompletando] = useState(false);
   const [generandoPdf, setGenerandoPdf] = useState(false);
+  const [showMuestreo, setShowMuestreo] = useState(false);
+  const [totalMuestreo, setTotalMuestreo] = useState("100");
+  const [cantidades, setCantidades] = useState<Record<number, string>>({});
+  const [guardandoMuestreo, setGuardandoMuestreo] = useState(false);
 
   const cargar = useCallback(async () => {
     try {
@@ -66,8 +76,20 @@ export default function ConteoDetalleScreen() {
       setProcs(ps);
       setCultivo(cultivos.find((cu) => cu.id === c.cultivo_id) ?? null);
       try {
+        const cals = await getCalibresPorVariedad(c.variedad_id);
+        setCalibres(cals);
+      } catch {}
+      try {
         const m = await getMuestreo(conteoId);
-        if (m.clasificaciones.length) setMuestreo(m);
+        if (m.clasificaciones.length) {
+          setMuestreo(m);
+          const prev: Record<number, string> = {};
+          m.clasificaciones.forEach((cl) => {
+            prev[cl.calibre_id] = String(cl.cantidad_muestreo);
+          });
+          setCantidades(prev);
+          setTotalMuestreo(String(m.clasificaciones[0]?.total_muestreo ?? 100));
+        }
       } catch {}
       try {
         const comp = await getComparacionAnterior(conteoId);
@@ -106,6 +128,36 @@ export default function ConteoDetalleScreen() {
         },
       },
     ]);
+  };
+
+  const handleGuardarMuestreo = async () => {
+    if (!calibres.length) return;
+    const total = parseInt(totalMuestreo);
+    if (isNaN(total) || total <= 0) return Alert.alert("Total inválido");
+    const items = calibres.map((c) => ({
+      calibre_id: c.id,
+      cantidad_muestreo: parseInt(cantidades[c.id] ?? "0") || 0,
+    }));
+    const suma = items.reduce((a, b) => a + b.cantidad_muestreo, 0);
+    if (suma !== total)
+      return Alert.alert(
+        "Error",
+        `La suma (${suma}) debe ser igual al total (${total}).`,
+      );
+    setGuardandoMuestreo(true);
+    try {
+      const m = await guardarMuestreo(conteoId, {
+        total_muestreo: total,
+        items,
+      });
+      setMuestreo(m);
+      setShowMuestreo(false);
+      Alert.alert("Muestreo guardado");
+    } catch (err: any) {
+      Alert.alert("Error", err.response?.data?.detail ?? "No se pudo guardar.");
+    } finally {
+      setGuardandoMuestreo(false);
+    }
   };
 
   const handleGenerarPDF = async () => {
@@ -335,18 +387,33 @@ export default function ConteoDetalleScreen() {
       </View>
 
       {/* Calibres */}
-      {muestreo && muestreo.clasificaciones.length > 0 && (
+      {conteo.conteo_total_acumulado > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Calibres</Text>
-          {muestreo.clasificaciones.map((c) => (
-            <View key={c.calibre_id} style={styles.calibreRow}>
-              <Text style={styles.calibreNombre}>{c.nombre_calibre}</Text>
-              <Text style={styles.calibrePct}>{c.porcentaje.toFixed(1)}%</Text>
-              <Text style={styles.calibreTotal}>
-                {c.cantidad_extrapolada.toLocaleString()}
-              </Text>
-            </View>
-          ))}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Calibres</Text>
+            {!completado && (
+              <TouchableOpacity onPress={() => setShowMuestreo(true)}>
+                <Text style={styles.addLink}>
+                  {muestreo ? "Editar" : "+ Registrar"}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {muestreo && muestreo.clasificaciones.length > 0 ? (
+            muestreo.clasificaciones.map((c) => (
+              <View key={c.calibre_id} style={styles.calibreRow}>
+                <Text style={styles.calibreNombre}>{c.nombre_calibre}</Text>
+                <Text style={styles.calibrePct}>
+                  {c.porcentaje.toFixed(1)}%
+                </Text>
+                <Text style={styles.calibreTotal}>
+                  {c.cantidad_extrapolada.toLocaleString()}
+                </Text>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.emptyText}>Sin muestreo registrado aún.</Text>
+          )}
         </View>
       )}
 
@@ -375,6 +442,105 @@ export default function ConteoDetalleScreen() {
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Modal muestreo */}
+      <Modal
+        visible={showMuestreo}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <ScrollView
+          style={styles.modal}
+          contentContainerStyle={styles.modalContent}
+        >
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Muestreo por calibre</Text>
+            <TouchableOpacity
+              onPress={() => setShowMuestreo(false)}
+              style={styles.modalClose}
+            >
+              <Ionicons name="close" size={22} color="#5a7a6a" />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.label}>Total de melones muestreados</Text>
+          <TextInput
+            style={styles.input}
+            value={totalMuestreo}
+            onChangeText={setTotalMuestreo}
+            keyboardType="number-pad"
+            placeholder="Ej. 100"
+            placeholderTextColor="#a0b5a8"
+          />
+
+          <Text style={[styles.label, { marginTop: 16 }]}>
+            Cantidad por calibre
+          </Text>
+          {calibres.map((c) => (
+            <View key={c.id} style={styles.calibreInputRow}>
+              <Text style={styles.calibreInputLabel}>{c.nombre}</Text>
+              <TextInput
+                style={[styles.input, { width: 80, textAlign: "center" }]}
+                value={cantidades[c.id] ?? ""}
+                onChangeText={(v) =>
+                  setCantidades((prev) => ({ ...prev, [c.id]: v }))
+                }
+                keyboardType="number-pad"
+                placeholder="0"
+                placeholderTextColor="#a0b5a8"
+              />
+            </View>
+          ))}
+
+          {(() => {
+            const suma = calibres.reduce(
+              (a, c) => a + (parseInt(cantidades[c.id] ?? "0") || 0),
+              0,
+            );
+            const total = parseInt(totalMuestreo) || 0;
+            const ok = suma === total && total > 0;
+            return (
+              <View
+                style={[
+                  styles.sumaIndicador,
+                  { backgroundColor: ok ? "#d1fae5" : "#fff3cd" },
+                ]}
+              >
+                <Ionicons
+                  name={ok ? "checkmark-circle" : "alert-circle-outline"}
+                  size={16}
+                  color={ok ? "#065f46" : "#856404"}
+                />
+                <Text
+                  style={{
+                    color: ok ? "#065f46" : "#856404",
+                    fontWeight: "700",
+                  }}
+                >
+                  {suma} / {total} —{" "}
+                  {ok
+                    ? "Completo"
+                    : suma < total
+                      ? `Faltan ${total - suma}`
+                      : `Excede en ${suma - total}`}
+                </Text>
+              </View>
+            );
+          })()}
+
+          <TouchableOpacity
+            style={[styles.btnPrimary, guardandoMuestreo && styles.btnDisabled]}
+            onPress={handleGuardarMuestreo}
+            disabled={guardandoMuestreo}
+          >
+            {guardandoMuestreo ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.btnPrimaryText}>Guardar muestreo</Text>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </Modal>
     </ScrollView>
   );
 }
@@ -509,4 +675,54 @@ const styles = StyleSheet.create({
   },
   btnCompletarText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   btnDisabled: { opacity: 0.5 },
+  label: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#5a7a6a",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  input: {
+    backgroundColor: "#f4f7f5",
+    borderWidth: 1.5,
+    borderColor: "#dde8e2",
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 15,
+    color: "#1a2e25",
+  },
+  btnPrimary: {
+    backgroundColor: "#2d6a4f",
+    borderRadius: 10,
+    padding: 14,
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+  },
+  btnPrimaryText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  modal: { flex: 1, backgroundColor: "#fff" },
+  modalContent: { padding: 24, gap: 12, paddingBottom: 48 },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  modalTitle: { fontSize: 18, fontWeight: "700", color: "#1a2e25" },
+  modalClose: { padding: 4 },
+  calibreInputRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  calibreInputLabel: { fontSize: 15, fontWeight: "600", color: "#1a2e25" },
+  sumaIndicador: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 10,
+  },
 });

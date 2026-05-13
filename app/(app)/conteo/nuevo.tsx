@@ -17,9 +17,12 @@ import {
   getConteosPorCultivo,
   crearConteo,
   getProcesamientosPorConteo,
-  subirVideo,
+  registrarProcesamiento,
+  subirVideoBackground,
 } from "../../../src/api/endpoints";
 import { Variedad, Conteo } from "../../../src/types";
+import * as SecureStore from "expo-secure-store";
+import { TOKEN_KEY } from "../../../src/api/client";
 
 export default function NuevoConteoScreen() {
   const router = useRouter();
@@ -128,25 +131,31 @@ export default function NuevoConteoScreen() {
       if (surcosBloqueados.has(s))
         return Alert.alert("Solapamiento", `El surco ${s} ya está cubierto.`);
     }
-    setPaso("subiendo");
+
     try {
-      const formData = new FormData();
-      formData.append("conteo_id", String(conteoSeleccionado.id));
-      formData.append("surco_inicio", surcoInicio);
-      formData.append("surco_fin", surcoFin);
-      formData.append("fecha_grabacion", new Date().toISOString());
-      formData.append("video", {
-        uri: videoFile.uri,
-        name: videoFile.name,
-        type: videoFile.mimeType ?? "video/mp4",
-      } as any);
-      const proc = await subirVideo(formData, setUploadProgress);
+      // 1. Registrar — respuesta inmediata, sin archivo
+      const proc = await registrarProcesamiento({
+        conteo_id: conteoSeleccionado.id,
+        surco_inicio: inicio,
+        surco_fin: fin,
+        fecha_grabacion: new Date().toISOString(),
+      });
+
+      // 2. Navegar YA — el usuario puede seguir trabajando
       router.replace(`/(app)/procesamiento/${proc.id}`);
+
+      // 3. Subir el archivo en background desde la nueva pantalla
+      const token = (await SecureStore.getItemAsync(TOKEN_KEY)) ?? "";
+      subirVideoBackground(proc.id, videoFile.uri, token, (pct) => {
+        // puedes emitir el progreso a un contexto global si quieres mostrarlo
+        console.log(`Subida ${pct}%`);
+      }).catch((err) => {
+        Alert.alert("Error al subir", err.message ?? "Verifica tu conexión.");
+      });
     } catch (err: any) {
-      setPaso("subir");
       Alert.alert(
-        "Error al subir",
-        err.response?.data?.detail ?? "Verifica tu conexión.",
+        "Error",
+        err.response?.data?.detail ?? "No se pudo registrar el video.",
       );
     }
   };
