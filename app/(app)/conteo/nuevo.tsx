@@ -25,7 +25,7 @@ import { Variedad, Conteo } from "../../../src/types";
 import * as SecureStore from "expo-secure-store";
 import { TOKEN_KEY } from "../../../src/api/client";
 
-// Celdas por fila fijas: el ancho se calcula para llenar exactamente el contenedor
+// Celdas por fila fijas el ancho se calcula para llenar exactamente el contenedor
 const COLS = 10;
 const GRID_PADDING = 10; // padding interno del wrapper (cada lado)
 const GAP = 3;
@@ -35,10 +35,10 @@ const GRID_WIDTH = SCREEN_WIDTH - CONTENT_PADDING * 2;
 const CELL_SIZE = Math.floor(
   (GRID_WIDTH - GRID_PADDING * 2 - GAP * (COLS - 1)) / COLS,
 );
-// Altura máxima = 4 filas completas + padding
+// Altura máxima = 4 filas completas + padding + GRID_PADDING extra para compensar el espacio que el ScrollView de Android añade internamente en el borde inferior
 const VISIBLE_ROWS = 4;
 const MAX_GRID_HEIGHT =
-  VISIBLE_ROWS * CELL_SIZE + (VISIBLE_ROWS - 1) * GAP + GRID_PADDING * 2;
+  VISIBLE_ROWS * CELL_SIZE + (VISIBLE_ROWS - 1) * GAP + GRID_PADDING * 3;
 
 export default function NuevoConteoScreen() {
   const router = useRouter();
@@ -182,7 +182,7 @@ export default function NuevoConteoScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/*Configurar conteo*/}
+      {/* PASO 1 — Configurar conteo*/}
       {paso === "configurar" && (
         <>
           <Text style={styles.stepLabel}>Paso 1 de 2 — Configurar conteo</Text>
@@ -355,9 +355,7 @@ export default function NuevoConteoScreen() {
         </>
       )}
 
-      {/* ══════════════════════════════════════════
-          PASO 2 — Subir video
-      ══════════════════════════════════════════ */}
+      {/* PASO 2 — Subir video */}
       {paso === "subir" && conteoSeleccionado && (
         <>
           <Text style={styles.stepLabel}>Paso 2 de 2 — Subir video</Text>
@@ -376,6 +374,7 @@ export default function NuevoConteoScreen() {
             <Text style={styles.label}>Cobertura de surcos</Text>
             <ScrollView
               style={[styles.surcoGridWrapper, { maxHeight: MAX_GRID_HEIGHT }]}
+              contentContainerStyle={styles.surcoGridContent}
               nestedScrollEnabled
               showsVerticalScrollIndicator
             >
@@ -658,6 +657,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1.5,
     borderColor: "#dde8e2",
+  },
+  surcoGridContent: {
     padding: GRID_PADDING,
   },
   surcoGrid: {
