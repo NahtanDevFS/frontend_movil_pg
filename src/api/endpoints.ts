@@ -49,11 +49,17 @@ export const getCalibresPorVariedad = async (
 //Conteos
 export const getConteosPorCultivo = async (
   cultivoId: number,
+  params?: {
+    fecha_desde?: string;
+    fecha_hasta?: string;
+    estado?: "en_progreso" | "completado";
+    skip?: number;
+    limit?: number;
+  },
 ): Promise<Conteo[]> => {
-  const res = await client.get(`/conteos/cultivo/${cultivoId}`);
+  const res = await client.get(`/conteos/cultivo/${cultivoId}`, { params });
   return res.data;
 };
-
 export const getConteo = async (conteoId: number): Promise<Conteo> => {
   const res = await client.get(`/conteos/${conteoId}`);
   return res.data;

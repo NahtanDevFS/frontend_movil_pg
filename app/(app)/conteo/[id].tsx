@@ -322,6 +322,7 @@ export default function ConteoDetalleScreen() {
           <Text style={styles.sectionTitle}>Videos</Text>
           {!completado && (
             <TouchableOpacity
+              style={styles.btnAgregar}
               onPress={() =>
                 router.push({
                   pathname: "/(app)/conteo/nuevo",
@@ -332,7 +333,8 @@ export default function ConteoDetalleScreen() {
                 })
               }
             >
-              <Text style={styles.addLink}>+ Agregar</Text>
+              <Ionicons name="cloud-upload-outline" size={16} color="#2d6a4f" />
+              <Text style={styles.btnAgregarText}>Agregar video</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -663,6 +665,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#dde8e2",
   },
+  btnAgregar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: "#2d6a4f",
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 4,
+  },
+  btnAgregarText: { color: "#2d6a4f", fontWeight: "700", fontSize: 14 },
   btnActionText: { fontSize: 14, fontWeight: "600", color: "#1a2e25" },
   btnCompletar: {
     backgroundColor: "#2d6a4f",
