@@ -300,15 +300,6 @@ export default function NuevoConteoScreen() {
               </View>
             </>
           )}
-
-          <TouchableOpacity
-            style={styles.btnPrimary}
-            onPress={handleConfirmar}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.btnPrimaryText}>Continuar</Text>
-            <Ionicons name="arrow-forward" size={16} color="#fff" />
-          </TouchableOpacity>
         </>
       )}
 

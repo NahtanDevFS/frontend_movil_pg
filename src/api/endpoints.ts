@@ -12,7 +12,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import Constants from "expo-constants";
 import { TOKEN_KEY } from "./client";
 
-// ── Auth ──────────────────────────────────────────────────────
+//Auth
 export const login = async (nombre: string, password: string) => {
   const params = new URLSearchParams();
   params.append("username", nombre);
@@ -28,13 +28,13 @@ export const getMe = async () => {
   return res.data;
 };
 
-// ── Cultivos ──────────────────────────────────────────────────
+//Cultivos
 export const getCultivos = async (): Promise<Cultivo[]> => {
   const res = await client.get("/cultivos/");
   return res.data;
 };
 
-// ── Catálogos ─────────────────────────────────────────────────
+//Catálogos
 export const getVariedades = async (): Promise<Variedad[]> => {
   const res = await client.get("/catalogos/variedades");
   return res.data;
@@ -47,14 +47,20 @@ export const getCalibresPorVariedad = async (
   return res.data;
 };
 
-// ── Conteos ───────────────────────────────────────────────────
+//Conteos
 export const getConteosPorCultivo = async (
   cultivoId: number,
+  params?: {
+    fecha_desde?: string;
+    fecha_hasta?: string;
+    estado?: "en_progreso" | "completado";
+    skip?: number;
+    limit?: number;
+  },
 ): Promise<Conteo[]> => {
-  const res = await client.get(`/conteos/cultivo/${cultivoId}`);
+  const res = await client.get(`/conteos/cultivo/${cultivoId}`, { params });
   return res.data;
 };
-
 export const getConteo = async (conteoId: number): Promise<Conteo> => {
   const res = await client.get(`/conteos/${conteoId}`);
   return res.data;
@@ -98,7 +104,7 @@ export const guardarMuestreo = async (
   return res.data;
 };
 
-// ── Procesamientos ────────────────────────────────────────────
+//Procesamientos
 export const getProcesamientosPorConteo = async (
   conteoId: number,
 ): Promise<ProcesamientoVideo[]> => {

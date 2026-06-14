@@ -24,6 +24,8 @@ const CONF_BG: Record<string, string> = {
   bajo: "#fee2e2",
 };
 
+type FiltroEstado = "todos" | "en_progreso" | "completado";
+
 export default function CultivoDetalleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -34,27 +36,71 @@ export default function CultivoDetalleScreen() {
   const [conteos, setConteos] = useState<Conteo[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [skip, setSkip] = useState(0);
+  const LIMIT = 20;
 
-  const cargar = useCallback(async () => {
-    try {
-      const [todosCultivos, listaConteos] = await Promise.all([
-        getCultivos(),
-        getConteosPorCultivo(cultivoId),
-      ]);
-      const cult = todosCultivos.find((c) => c.id === cultivoId) ?? null;
-      setCultivo(cult);
-      setConteos(listaConteos);
-      if (cult) navigation.setOptions({ title: cult.nombre });
-    } catch {
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [cultivoId]);
+  // Filtros
+  const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>("todos");
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
+  const [mostrarFiltros, setMostrarFiltros] = useState(false);
+
+  const cargar = useCallback(
+    async (resetear = true) => {
+      const nuevoSkip = resetear ? 0 : skip;
+      try {
+        const [todosCultivos, listaConteos] = await Promise.all([
+          getCultivos(),
+          getConteosPorCultivo(cultivoId, {
+            estado: filtroEstado === "todos" ? undefined : filtroEstado,
+            fecha_desde: fechaDesde || undefined,
+            fecha_hasta: fechaHasta || undefined,
+            skip: nuevoSkip,
+            limit: LIMIT,
+          }),
+        ]);
+        const cult = todosCultivos.find((c) => c.id === cultivoId) ?? null;
+        setCultivo(cult);
+        if (cult) navigation.setOptions({ title: cult.nombre });
+        if (resetear) {
+          setConteos(listaConteos);
+          setSkip(LIMIT);
+        } else {
+          setConteos((prev) => [...prev, ...listaConteos]);
+          setSkip(nuevoSkip + LIMIT);
+        }
+        setHasMore(listaConteos.length === LIMIT);
+      } catch {
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+        setLoadingMore(false);
+      }
+    },
+    [cultivoId, filtroEstado, fechaDesde, fechaHasta, skip],
+  );
 
   useEffect(() => {
-    cargar();
-  }, [cargar]);
+    setLoading(true);
+    setSkip(0);
+    cargar(true);
+  }, [cultivoId, filtroEstado, fechaDesde, fechaHasta]);
+
+  const handleCargarMas = () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    cargar(false);
+  };
+
+  const limpiarFiltros = () => {
+    setFiltroEstado("todos");
+    setFechaDesde("");
+    setFechaHasta("");
+  };
+
+  const hayFiltros = filtroEstado !== "todos" || fechaDesde || fechaHasta;
 
   if (loading)
     return (
@@ -65,6 +111,7 @@ export default function CultivoDetalleScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Header del cultivo */}
       {cultivo && (
         <View style={styles.cultivoHeader}>
           <Text style={styles.cultivoNombre}>{cultivo.nombre}</Text>
@@ -89,6 +136,107 @@ export default function CultivoDetalleScreen() {
         </View>
       )}
 
+      {/* Barra de filtros */}
+      <View style={styles.filtroBar}>
+        <TouchableOpacity
+          style={[
+            styles.filtroToggle,
+            mostrarFiltros && styles.filtroToggleActive,
+          ]}
+          onPress={() => setMostrarFiltros((v) => !v)}
+        >
+          <Ionicons
+            name="funnel-outline"
+            size={15}
+            color={mostrarFiltros ? "#2d6a4f" : "#5a7a6a"}
+          />
+          <Text
+            style={[
+              styles.filtroToggleText,
+              mostrarFiltros && { color: "#2d6a4f" },
+            ]}
+          >
+            Filtros{hayFiltros ? " •" : ""}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Chips de estado */}
+        <View style={styles.estadoChips}>
+          {(["todos", "en_progreso", "completado"] as FiltroEstado[]).map(
+            (e) => (
+              <TouchableOpacity
+                key={e}
+                style={[styles.chip, filtroEstado === e && styles.chipActive]}
+                onPress={() => setFiltroEstado(e)}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    filtroEstado === e && styles.chipTextActive,
+                  ]}
+                >
+                  {e === "todos"
+                    ? "Todos"
+                    : e === "en_progreso"
+                      ? "En progreso"
+                      : "Completados"}
+                </Text>
+              </TouchableOpacity>
+            ),
+          )}
+        </View>
+      </View>
+
+      {/* Panel de fechas expandible */}
+      {mostrarFiltros && (
+        <View style={styles.filtroPanelFechas}>
+          <View style={styles.fechaRow}>
+            <View style={styles.fechaField}>
+              <Text style={styles.fechaLabel}>Desde</Text>
+              <TouchableOpacity
+                style={styles.fechaInput}
+                onPress={() => {
+                  /* En producción usar DateTimePicker */
+                }}
+              >
+                <Text
+                  style={
+                    fechaDesde ? styles.fechaValor : styles.fechaPlaceholder
+                  }
+                >
+                  {fechaDesde || "AAAA-MM-DD"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.fechaField}>
+              <Text style={styles.fechaLabel}>Hasta</Text>
+              <TouchableOpacity
+                style={styles.fechaInput}
+                onPress={() => {
+                  /* En producción usar DateTimePicker */
+                }}
+              >
+                <Text
+                  style={
+                    fechaHasta ? styles.fechaValor : styles.fechaPlaceholder
+                  }
+                >
+                  {fechaHasta || "AAAA-MM-DD"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          {hayFiltros && (
+            <TouchableOpacity
+              style={styles.btnLimpiar}
+              onPress={limpiarFiltros}
+            >
+              <Text style={styles.btnLimpiarText}>Limpiar filtros</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
       <FlatList
         data={conteos}
         keyExtractor={(item) => String(item.id)}
@@ -98,7 +246,7 @@ export default function CultivoDetalleScreen() {
             refreshing={refreshing}
             onRefresh={() => {
               setRefreshing(true);
-              cargar();
+              cargar(true);
             }}
             tintColor="#2d6a4f"
           />
@@ -121,11 +269,26 @@ export default function CultivoDetalleScreen() {
         ListEmptyComponent={
           <View style={styles.emptyBox}>
             <Ionicons name="document-text-outline" size={36} color="#b7e4c7" />
-            <Text style={styles.emptyTitle}>Sin conteos aún</Text>
+            <Text style={styles.emptyTitle}>Sin conteos</Text>
             <Text style={styles.emptySubtitle}>
-              Inicia un conteo para subir videos del cultivo.
+              {hayFiltros
+                ? "Ningún conteo coincide con los filtros aplicados."
+                : "Inicia un conteo para subir videos del cultivo."}
             </Text>
           </View>
+        }
+        ListFooterComponent={
+          loadingMore ? (
+            <ActivityIndicator
+              size="small"
+              color="#2d6a4f"
+              style={{ marginVertical: 16 }}
+            />
+          ) : hasMore && conteos.length > 0 ? (
+            <TouchableOpacity style={styles.btnMas} onPress={handleCargarMas}>
+              <Text style={styles.btnMasText}>Cargar más</Text>
+            </TouchableOpacity>
+          ) : null
         }
         renderItem={({ item }) => (
           <TouchableOpacity
@@ -203,6 +366,70 @@ const styles = StyleSheet.create({
   cultivoNombre: { fontSize: 17, fontWeight: "700", color: "#fff" },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
   metaText: { fontSize: 12, color: "rgba(255,255,255,0.75)" },
+  // Filtros
+  filtroBar: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#dde8e2",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  filtroToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#dde8e2",
+    backgroundColor: "#f4f7f5",
+  },
+  filtroToggleActive: { borderColor: "#2d6a4f", backgroundColor: "#e8f5ee" },
+  filtroToggleText: { fontSize: 12, fontWeight: "600", color: "#5a7a6a" },
+  estadoChips: { flexDirection: "row", gap: 6, flex: 1 },
+  chip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#dde8e2",
+    backgroundColor: "#f4f7f5",
+  },
+  chipActive: { backgroundColor: "#e8f5ee", borderColor: "#2d6a4f" },
+  chipText: { fontSize: 11, fontWeight: "600", color: "#5a7a6a" },
+  chipTextActive: { color: "#2d6a4f" },
+  filtroPanelFechas: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#dde8e2",
+    gap: 10,
+  },
+  fechaRow: { flexDirection: "row", gap: 12 },
+  fechaField: { flex: 1, gap: 4 },
+  fechaLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#5a7a6a",
+    textTransform: "uppercase",
+  },
+  fechaInput: {
+    backgroundColor: "#f4f7f5",
+    borderWidth: 1.5,
+    borderColor: "#dde8e2",
+    borderRadius: 8,
+    padding: 10,
+  },
+  fechaValor: { fontSize: 13, color: "#1a2e25", fontWeight: "600" },
+  fechaPlaceholder: { fontSize: 13, color: "#a0b5a8" },
+  btnLimpiar: { alignSelf: "flex-end" },
+  btnLimpiarText: { fontSize: 12, fontWeight: "700", color: "#dc2626" },
+  // Lista
   list: { padding: 16, gap: 10 },
   btnNuevo: {
     backgroundColor: "#2d6a4f",
@@ -240,4 +467,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 15, fontWeight: "700", color: "#1a2e25" },
   emptySubtitle: { fontSize: 13, color: "#5a7a6a", textAlign: "center" },
+  btnMas: {
+    margin: 16,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#2d6a4f",
+    alignItems: "center",
+  },
+  btnMasText: { fontSize: 13, fontWeight: "700", color: "#2d6a4f" },
 });
