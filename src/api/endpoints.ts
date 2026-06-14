@@ -8,6 +8,9 @@ import {
   Variedad,
   Calibre,
 } from "../types";
+import * as FileSystem from "expo-file-system/legacy";
+import Constants from "expo-constants";
+import { TOKEN_KEY } from "./client";
 
 // ── Auth ──────────────────────────────────────────────────────
 export const login = async (nombre: string, password: string) => {
@@ -110,20 +113,64 @@ export const getProcesamiento = async (
   return res.data;
 };
 
-export const subirVideo = async (
-  data: FormData,
-  onUploadProgress?: (pct: number) => void,
-): Promise<ProcesamientoVideo> => {
-  const res = await client.post("/procesamientos/", data, {
+//registra el procesamiento sin archivo, devuelve el id inmediatamente
+export const registrarProcesamiento = async (data: {
+  conteo_id: number;
+  surco_inicio: number;
+  surco_fin: number;
+  fecha_grabacion: string;
+}): Promise<ProcesamientoVideo> => {
+  const form = new FormData();
+  form.append("conteo_id", String(data.conteo_id));
+  form.append("surco_inicio", String(data.surco_inicio));
+  form.append("surco_fin", String(data.surco_fin));
+  form.append("fecha_grabacion", data.fecha_grabacion);
+  const res = await client.post("/procesamientos/registrar", form, {
     headers: { "Content-Type": "multipart/form-data" },
-    timeout: 300000, // 5 min para uploads grandes
-    onUploadProgress: (e: { loaded: number; total?: number }) => {
-      if (onUploadProgress && e.total) {
-        onUploadProgress(Math.round((e.loaded / e.total) * 100));
-      }
-    },
   });
   return res.data;
+};
+
+//sube el archivo en background con expo-file-system
+export const subirVideoBackground = async (
+  procesamientoId: number,
+  videoUri: string,
+  token: string,
+  onProgress?: (pct: number) => void,
+): Promise<void> => {
+  const apiUrl =
+    (Constants.expoConfig?.extra?.apiUrl as string | undefined) ??
+    "http://localhost:8000";
+  const uploadUrl = `${apiUrl}/procesamientos/${procesamientoId}/video`;
+
+  console.log("Subiendo a:", uploadUrl); // eliminar después de confirmar
+
+  const task = FileSystem.createUploadTask(
+    uploadUrl,
+    videoUri,
+    {
+      httpMethod: "POST",
+      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+      fieldName: "video",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "ngrok-skip-browser-warning": "true", // ← necesario para ngrok
+      },
+    },
+    (progress) => {
+      if (onProgress && progress.totalBytesExpectedToSend > 0) {
+        const pct = Math.round(
+          (progress.totalBytesSent / progress.totalBytesExpectedToSend) * 100,
+        );
+        onProgress(pct);
+      }
+    },
+  );
+
+  const result = await task.uploadAsync();
+  if (!result || result.status >= 400) {
+    throw new Error(`Error al subir el video. Status: ${result?.status}`);
+  }
 };
 
 export const ajustarConteo = async (
@@ -138,7 +185,5 @@ export const ajustarConteo = async (
 };
 
 export const getVideoAnotadoUrl = (procesamientoId: number): string => {
-  // Devuelve la URL directa para descargar con el token en header
-  // Se usa con expo-file-system para la descarga autenticada
   return `/procesamientos/${procesamientoId}/video-anotado`;
 };
