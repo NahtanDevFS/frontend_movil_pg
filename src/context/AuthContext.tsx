@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await SecureStore.setItemAsync(TOKEN_KEY, access_token);
     const userData = await getMe();
 
-    // La app móvil es solo para operadores
+    // La app móvil es solo para operadores y adicionalmente, administradores
     if (userData.rol_id === undefined) {
       await SecureStore.deleteItemAsync(TOKEN_KEY);
       throw new Error("No se pudo verificar el usuario.");
