@@ -242,6 +242,19 @@ export default function NuevoConteoScreen() {
                   Iniciar un nuevo conteo
                 </Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.btnPrimary,
+                  !conteoSeleccionado && styles.btnDisabled,
+                ]}
+                onPress={handleConfirmar}
+                disabled={!conteoSeleccionado}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.btnPrimaryText}>Continuar</Text>
+                <Ionicons name="arrow-forward" size={16} color="#fff" />
+              </TouchableOpacity>
             </>
           ) : (
             <>
@@ -298,6 +311,16 @@ export default function NuevoConteoScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+
+              <TouchableOpacity
+                style={[styles.btnPrimary, !variedadId && styles.btnDisabled]}
+                onPress={handleConfirmar}
+                disabled={!variedadId}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.btnPrimaryText}>Crear y continuar</Text>
+                <Ionicons name="arrow-forward" size={16} color="#fff" />
+              </TouchableOpacity>
             </>
           )}
         </>
