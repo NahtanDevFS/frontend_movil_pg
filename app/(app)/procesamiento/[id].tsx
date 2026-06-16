@@ -104,12 +104,12 @@ export default function ProcesamientoScreen() {
   useEffect(() => {
     cargar();
     pollRef.current = setInterval(() => {
-      if (procesando) cargar();
+      cargar();
     }, 4000);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [cargar, procesando]);
+  }, [cargar]);
 
   const handleGuardarAjuste = async () => {
     if (!proc) return;
