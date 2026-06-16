@@ -19,6 +19,7 @@ import {
   ajustarConteo,
   getConteo,
   getComparacionAnterior,
+  getProgreso,
 } from "../../../src/api/endpoints";
 import { TOKEN_KEY } from "../../../src/api/client";
 import {
@@ -56,6 +57,11 @@ export default function ProcesamientoScreen() {
   );
   const [loading, setLoading] = useState(true);
   const [procesando, setProcesando] = useState(false);
+  const [progreso, setProgreso] = useState<{
+    progreso_pct: number;
+    conteo_parcial: number;
+    disponible: boolean;
+  } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [conteoAjustado, setConteoAjustado] = useState("");
@@ -80,6 +86,13 @@ export default function ProcesamientoScreen() {
         if (comp) setComparacion(comp);
       } else {
         setProcesando(true);
+        // Mientras procesa, trae el progreso en vivo (best-effort)
+        try {
+          const pr = await getProgreso(procId);
+          setProgreso(pr);
+        } catch {
+          // sin progreso disponible: no pasa nada, salta el spinner
+        }
       }
     } catch {
       Alert.alert("Error", "No se pudo cargar el resultado.");
@@ -150,10 +163,41 @@ export default function ProcesamientoScreen() {
     );
 
   if (procesando || !proc?.resultado) {
+    const hayBarra = progreso?.disponible && progreso.progreso_pct > 0;
+    const hayParcial = progreso?.disponible;
+
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#2d6a4f" />
         <Text style={styles.procesandoTitle}>Procesando video con IA</Text>
+
+        {/* Conteo parcial en vivo */}
+        {hayParcial && (
+          <View style={styles.parcialBox}>
+            <Text style={styles.parcialNum}>
+              {progreso!.conteo_parcial.toLocaleString()}
+            </Text>
+            <Text style={styles.parcialLabel}>
+              melones detectados hasta ahora
+            </Text>
+          </View>
+        )}
+
+        {/* Barra de progreso (solo si existe un porcentaje fiable) */}
+        {hayBarra && (
+          <View style={styles.barraWrap}>
+            <View style={styles.barraTrack}>
+              <View
+                style={[
+                  styles.barraFill,
+                  { width: `${progreso!.progreso_pct}%` },
+                ]}
+              />
+            </View>
+            <Text style={styles.barraPct}>{progreso!.progreso_pct}%</Text>
+          </View>
+        )}
+
         <Text style={styles.procesandoSub}>
           El modelo está analizando los frames. Esto puede tomar varios minutos.
         </Text>
@@ -454,4 +498,45 @@ const styles = StyleSheet.create({
     borderColor: "#dde8e2",
   },
   btnSecondaryText: { color: "#5a7a6a", fontWeight: "600", fontSize: 14 },
+  parcialBox: {
+    alignItems: "center",
+    gap: 2,
+    marginVertical: 4,
+  },
+  parcialNum: {
+    fontSize: 44,
+    fontWeight: "800",
+    color: "#2d6a4f",
+  },
+  parcialLabel: {
+    fontSize: 13,
+    color: "#5a7a6a",
+    textAlign: "center",
+  },
+  barraWrap: {
+    width: "100%",
+    maxWidth: 280,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  barraTrack: {
+    flex: 1,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#dde8e2",
+    overflow: "hidden",
+  },
+  barraFill: {
+    height: "100%",
+    borderRadius: 4,
+    backgroundColor: "#2d6a4f",
+  },
+  barraPct: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#2d6a4f",
+    minWidth: 36,
+    textAlign: "right",
+  },
 });

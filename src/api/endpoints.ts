@@ -193,3 +193,16 @@ export const ajustarConteo = async (
 export const getVideoAnotadoUrl = (procesamientoId: number): string => {
   return `/procesamientos/${procesamientoId}/video-anotado`;
 };
+
+export interface ProgresoProcesamiento {
+  progreso_pct: number;
+  conteo_parcial: number;
+  disponible: boolean;
+}
+
+export const getProgreso = async (
+  id: number,
+): Promise<ProgresoProcesamiento> => {
+  const res = await client.get(`/procesamientos/${id}/progreso`);
+  return res.data;
+};
