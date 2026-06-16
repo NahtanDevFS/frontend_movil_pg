@@ -4,7 +4,7 @@
     "slug": "meloncount-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/logo_meloncount.png",
     "userInterfaceStyle": "light",
     "splash": {
       "resizeMode": "contain",
