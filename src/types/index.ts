@@ -1,4 +1,4 @@
-// ── Catálogos ─────────────────────────────────────────────────
+//Catálogos
 export interface Rol {
   id: number;
   nombre: string;
@@ -17,7 +17,7 @@ export interface Calibre {
   orden: number;
 }
 
-// ── Usuarios ──────────────────────────────────────────────────
+//Usuarios
 export interface Usuario {
   id: number;
   nombre: string;
@@ -26,7 +26,7 @@ export interface Usuario {
   created_at: string;
 }
 
-// ── Cultivos ──────────────────────────────────────────────────
+//Cultivos
 export interface Cultivo {
   id: number;
   usuario_id: number;
@@ -38,7 +38,7 @@ export interface Cultivo {
   created_at: string;
 }
 
-// ── Conteos ───────────────────────────────────────────────────
+//Conteos
 export interface Conteo {
   id: number;
   cultivo_id: number;
@@ -54,7 +54,7 @@ export interface Conteo {
   created_at: string;
 }
 
-// ── Procesamientos ────────────────────────────────────────────
+//Procesamientos
 export interface ResultadoIa {
   id: number;
   conteo_ia: number;
@@ -83,7 +83,7 @@ export interface ProcesamientoVideo {
   resultado: ResultadoIa | null;
 }
 
-// ── Muestreo / Calibres ───────────────────────────────────────
+//Muestreo / Calibres
 export interface ClasificacionCalibre {
   id: number;
   calibre_id: number;
@@ -101,7 +101,7 @@ export interface MuestreoResponse {
   clasificaciones: ClasificacionCalibre[];
 }
 
-// ── Comparación anterior ──────────────────────────────────────
+//Comparación anterior
 export interface ComparacionAnterior {
   conteo_anterior_id: number | null;
   conteo_anterior_total: number | null;

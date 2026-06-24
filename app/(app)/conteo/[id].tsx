@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -106,7 +106,34 @@ export default function ConteoDetalleScreen() {
     cargar();
   }, [cargar]);
 
+  //logica de cobertura
+  const surcosCubiertos = useMemo(() => {
+    const setSurcos = new Set<number>();
+    procs.forEach((p) => {
+      // Solo sumamos los surcos de videos que terminaron con éxito
+      if (p.resultado) {
+        for (let i = p.surco_inicio; i <= p.surco_fin; i++) {
+          setSurcos.add(i);
+        }
+      }
+    });
+    return setSurcos.size;
+  }, [procs]);
+
+  const coberturaCompleta = conteo
+    ? surcosCubiertos >= conteo.total_surcos
+    : false;
+
   const handleCompletar = () => {
+    // Validar cobertura primero
+    if (!coberturaCompleta) {
+      Alert.alert(
+        "Cobertura incompleta",
+        `Aún faltan surcos por procesar. Se han cubierto ${surcosCubiertos} de ${conteo?.total_surcos} surcos requeridos para este cultivo.`,
+      );
+      return;
+    }
+
     Alert.alert("Marcar como completado", "Esta acción no se puede revertir.", [
       { text: "Cancelar", style: "cancel" },
       {
@@ -431,17 +458,59 @@ export default function ConteoDetalleScreen() {
             {generandoPdf ? "Generando..." : "Exportar reporte PDF"}
           </Text>
         </TouchableOpacity>
+
+        {/* CONTENEDOR DE COBERTURA Y BOTÓN COMPLETAR */}
         {!completado && conteo.conteo_total_acumulado > 0 && (
-          <TouchableOpacity
-            style={[styles.btnCompletar, completando && styles.btnDisabled]}
-            onPress={handleCompletar}
-            disabled={completando}
-          >
-            <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
-            <Text style={styles.btnCompletarText}>
-              {completando ? "Completando..." : "Marcar como completado"}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.coberturaWrapper}>
+            <View style={styles.coberturaHeader}>
+              <Text style={styles.coberturaLabel}>Cobertura de surcos</Text>
+              <Text
+                style={[
+                  styles.coberturaVal,
+                  { color: coberturaCompleta ? "#059669" : "#856404" },
+                ]}
+              >
+                {surcosCubiertos} / {conteo.total_surcos}
+              </Text>
+            </View>
+
+            {/* Barra de progreso */}
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    width: `${Math.min(
+                      100,
+                      (surcosCubiertos / conteo.total_surcos) * 100,
+                    )}%`,
+                    backgroundColor: coberturaCompleta ? "#059669" : "#f59e0b",
+                  },
+                ]}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.btnCompletar,
+                { marginTop: 16 }, // Espacio respecto a la barra de progreso
+                (!coberturaCompleta || completando) && styles.btnDisabled,
+              ]}
+              // Mantenemos el botón presionable aunque falte cobertura,
+              // para que la función handleCompletar pueda disparar la Alerta explicativa.
+              disabled={completando}
+              onPress={handleCompletar}
+            >
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={18}
+                color="#fff"
+              />
+              <Text style={styles.btnCompletarText}>
+                {completando ? "Completando..." : "Marcar como completado"}
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -738,5 +807,38 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 12,
     borderRadius: 10,
+  },
+
+  coberturaWrapper: {
+    marginTop: 8,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#dde8e2",
+  },
+  coberturaHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  coberturaLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#5a7a6a",
+    textTransform: "uppercase",
+  },
+  coberturaVal: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  progressTrack: {
+    height: 8,
+    backgroundColor: "#e8f5ee",
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 4,
   },
 });
