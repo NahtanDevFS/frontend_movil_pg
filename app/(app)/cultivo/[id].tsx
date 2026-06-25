@@ -7,11 +7,13 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { useRouter, useLocalSearchParams, useNavigation } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { getConteosPorCultivo, getCultivos } from "../../../src/api/endpoints";
 import { Conteo, Cultivo } from "../../../src/types";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 const CONF_COLOR: Record<string, string> = {
   alto: "#065f46",
@@ -45,6 +47,9 @@ export default function CultivoDetalleScreen() {
   const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>("todos");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
+  const [pickerAbierto, setPickerAbierto] = useState<"desde" | "hasta" | null>(
+    null,
+  );
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
 
   const cargar = useCallback(
@@ -92,6 +97,30 @@ export default function CultivoDetalleScreen() {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     cargar(false);
+  };
+
+  // Formatea un Date a "AAAA-MM-DD" (lo que espera el backend), en hora local
+  const formatearFecha = (d: Date) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  // Maneja la selección del picker nativo (Android cierra solo; iOS se cierra al confirmar). event.type === "dismissed" = el usuario canceló.
+  const onCambioFecha = (event: any, fecha?: Date) => {
+    const cual = pickerAbierto;
+    // En Android el diálogo se cierra solo; ocultamos el picker siempre.
+    if (Platform.OS === "android") setPickerAbierto(null);
+
+    if (event.type === "dismissed" || !fecha) {
+      if (Platform.OS === "ios") setPickerAbierto(null);
+      return;
+    }
+    const valor = formatearFecha(fecha);
+    if (cual === "desde") setFechaDesde(valor);
+    else if (cual === "hasta") setFechaHasta(valor);
+    if (Platform.OS === "ios") setPickerAbierto(null);
   };
 
   const limpiarFiltros = () => {
@@ -199,9 +228,7 @@ export default function CultivoDetalleScreen() {
               <Text style={styles.fechaLabel}>Desde</Text>
               <TouchableOpacity
                 style={styles.fechaInput}
-                onPress={() => {
-                  /* En producción usar DateTimePicker */
-                }}
+                onPress={() => setPickerAbierto("desde")}
               >
                 <Text
                   style={
@@ -216,9 +243,7 @@ export default function CultivoDetalleScreen() {
               <Text style={styles.fechaLabel}>Hasta</Text>
               <TouchableOpacity
                 style={styles.fechaInput}
-                onPress={() => {
-                  /* En producción usar DateTimePicker */
-                }}
+                onPress={() => setPickerAbierto("hasta")}
               >
                 <Text
                   style={
@@ -239,6 +264,21 @@ export default function CultivoDetalleScreen() {
             </TouchableOpacity>
           )}
         </View>
+      )}
+
+      {pickerAbierto && (
+        <DateTimePicker
+          value={
+            pickerAbierto === "desde" && fechaDesde
+              ? new Date(fechaDesde + "T00:00:00")
+              : pickerAbierto === "hasta" && fechaHasta
+                ? new Date(fechaHasta + "T00:00:00")
+                : new Date()
+          }
+          mode="date"
+          display={Platform.OS === "ios" ? "spinner" : "default"}
+          onChange={onCambioFecha}
+        />
       )}
 
       <FlatList
