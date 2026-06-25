@@ -148,10 +148,18 @@ export default function ProcesamientoScreen() {
           style: "destructive",
           onPress: async () => {
             setCancelando(true);
+            // Detener el polling antes de cancelar, para que ningún tick en vuelo intente releer y dispare una alerta de error.
+            if (pollRef.current) {
+              clearInterval(pollRef.current);
+              pollRef.current = null;
+            }
             try {
               await cancelarProcesamiento(procId);
-              if (pollRef.current) clearInterval(pollRef.current);
-              await cargar();
+              // Actualizar el estado local directamente (sin recargar): refleja el cancelado al instante y evita la carrera con la lectura.
+              setProc((prev) =>
+                prev ? { ...prev, estado_nombre: "cancelado" } : prev,
+              );
+              setProcesando(true); // fuerza la rama de estado terminal
             } catch (err: any) {
               Alert.alert(
                 "Error",
