@@ -106,10 +106,14 @@ export default function CultivosScreen() {
             </View>
             <View style={styles.cardContent}>
               <Text style={styles.cardNombre}>{item.nombre}</Text>
-              {item.ubicacion ? (
+              {item.municipio_nombre ? (
                 <View style={styles.metaRow}>
                   <Ionicons name="location-outline" size={12} color="#8fa898" />
-                  <Text style={styles.metaText}>{item.ubicacion}</Text>
+                  <Text
+                    style={[styles.metaText, { textTransform: "capitalize" }]}
+                  >
+                    {item.municipio_nombre}, {item.departamento_nombre}
+                  </Text>
                 </View>
               ) : null}
               <View style={styles.chipsRow}>

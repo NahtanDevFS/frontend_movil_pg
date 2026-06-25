@@ -116,14 +116,18 @@ export default function CultivoDetalleScreen() {
         <View style={styles.cultivoHeader}>
           <Text style={styles.cultivoNombre}>{cultivo.nombre}</Text>
           <View style={styles.metaRow}>
-            {cultivo.ubicacion ? (
+            {cultivo.municipio_nombre ? (
               <>
                 <Ionicons
                   name="location-outline"
                   size={13}
                   color="rgba(255,255,255,0.7)"
                 />
-                <Text style={styles.metaText}>{cultivo.ubicacion}</Text>
+                <Text
+                  style={[styles.metaText, { textTransform: "capitalize" }]}
+                >
+                  {cultivo.municipio_nombre}, {cultivo.departamento_nombre}
+                </Text>
               </>
             ) : null}
             <Ionicons

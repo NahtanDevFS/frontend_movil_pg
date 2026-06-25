@@ -31,11 +31,29 @@ export interface Cultivo {
   id: number;
   usuario_id: number;
   nombre: string;
+  municipio_id: number;
+  // nombres desnormalizados que el backend ya resuelve
+  municipio_nombre: string;
+  departamento_id: number;
+  departamento_nombre: string;
+  // ubicacion: dirección/referencia libre dentro del municipio (opcional)
   ubicacion: string | null;
   hectareas: number | null;
   total_surcos: number;
   activo: boolean;
   created_at: string;
+}
+
+// Catálogos geográficos
+export interface Departamento {
+  id: number;
+  nombre: string;
+}
+
+export interface Municipio {
+  id: number;
+  nombre: string;
+  departamento_id: number;
 }
 
 //Conteos

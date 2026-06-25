@@ -218,7 +218,7 @@ export default function ConteoDetalleScreen() {
           <p style="margin:4px 0 0;opacity:0.7;font-size:12px">Sistema de Conteo Pre-cosecha · Amadeo Export S.A.</p>
         </div>
         <h2 style="color:#2d6a4f">Reporte de Conteo #${conteoId}</h2>
-        <p style="color:#5a7a6a">${cultivo.nombre}${cultivo.ubicacion ? " · " + cultivo.ubicacion : ""}</p>
+        <p style="color:#5a7a6a">${cultivo.nombre}${cultivo.municipio_nombre ? ' · <span style="text-transform:capitalize">' + cultivo.municipio_nombre + ", " + cultivo.departamento_nombre + "</span>" : ""}${cultivo.ubicacion ? " · " + cultivo.ubicacion : ""}</p>
         <div style="background:#f4f7f5;border-radius:10px;padding:16px;margin:20px 0;text-align:center">
           <p style="margin:0;font-size:11px;color:#5a7a6a;text-transform:uppercase;letter-spacing:1px">Total acumulado</p>
           <p style="margin:4px 0;font-size:56px;font-weight:800;color:#2d6a4f">${conteo.conteo_total_acumulado.toLocaleString()}</p>
