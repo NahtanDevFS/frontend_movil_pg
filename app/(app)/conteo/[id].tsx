@@ -44,6 +44,76 @@ const CONF_COLOR: Record<string, string> = {
   moderado: "#856404",
   bajo: "#991b1b",
 };
+// A partir de cuántos videos la lista usa scroll interno (en vez de crecer)
+const MAX_VIDEOS_SIN_SCROLL = 5;
+// Altura máxima del contenedor scrollable de videos (4-5 filas visibles)
+const MAX_VIDEOS_HEIGHT = 340;
+
+// Lista de videos procesados. Si supera MAX_VIDEOS_SIN_SCROLL, se muestra dentro de un contenedor con scroll interno (mismo patrón que la grilla de surcos en nuevo conteo) para no alargar indefinidamente la pantalla.
+function VideosLista({
+  procs,
+  onSelect,
+}: {
+  procs: ProcesamientoVideo[];
+  onSelect: (id: number) => void;
+}) {
+  const filas = procs.map((p) => (
+    <TouchableOpacity
+      key={p.id}
+      style={styles.procRow}
+      onPress={() => onSelect(p.id)}
+    >
+      <View>
+        <Text style={styles.procSurcos}>
+          Surcos {p.surco_inicio}–{p.surco_fin}
+        </Text>
+        {p.resultado && (
+          <Text style={styles.procTotal}>
+            {(
+              p.resultado.conteo_ajustado ?? p.resultado.conteo_ia
+            ).toLocaleString()}{" "}
+            melones
+          </Text>
+        )}
+      </View>
+      <View style={styles.procRight}>
+        {p.resultado?.nivel_confiabilidad && (
+          <View
+            style={[
+              styles.badge,
+              { backgroundColor: CONF_BG[p.resultado.nivel_confiabilidad] },
+            ]}
+          >
+            <Text
+              style={[
+                styles.badgeText,
+                { color: CONF_COLOR[p.resultado.nivel_confiabilidad] },
+              ]}
+            >
+              IA:{" "}
+              {p.resultado.nivel_confiabilidad.charAt(0).toUpperCase() +
+                p.resultado.nivel_confiabilidad.slice(1)}
+            </Text>
+          </View>
+        )}
+        <Ionicons name="chevron-forward" size={16} color="#b7c9bf" />
+      </View>
+    </TouchableOpacity>
+  ));
+
+  if (procs.length > MAX_VIDEOS_SIN_SCROLL) {
+    return (
+      <ScrollView
+        style={{ maxHeight: MAX_VIDEOS_HEIGHT }}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator
+      >
+        {filas}
+      </ScrollView>
+    );
+  }
+  return <>{filas}</>;
+}
 
 export default function ConteoDetalleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -501,52 +571,10 @@ export default function ConteoDetalleScreen() {
         {procs.length === 0 ? (
           <Text style={styles.emptyText}>Sin videos procesados aún.</Text>
         ) : (
-          procs.map((p) => (
-            <TouchableOpacity
-              key={p.id}
-              style={styles.procRow}
-              onPress={() => router.push(`/(app)/procesamiento/${p.id}`)}
-            >
-              <View>
-                <Text style={styles.procSurcos}>
-                  Surcos {p.surco_inicio}–{p.surco_fin}
-                </Text>
-                {p.resultado && (
-                  <Text style={styles.procTotal}>
-                    {(
-                      p.resultado.conteo_ajustado ?? p.resultado.conteo_ia
-                    ).toLocaleString()}{" "}
-                    melones
-                  </Text>
-                )}
-              </View>
-              <View style={styles.procRight}>
-                {p.resultado?.nivel_confiabilidad && (
-                  <View
-                    style={[
-                      styles.badge,
-                      {
-                        backgroundColor:
-                          CONF_BG[p.resultado.nivel_confiabilidad],
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.badgeText,
-                        { color: CONF_COLOR[p.resultado.nivel_confiabilidad] },
-                      ]}
-                    >
-                      IA:{" "}
-                      {p.resultado.nivel_confiabilidad.charAt(0).toUpperCase() +
-                        p.resultado.nivel_confiabilidad.slice(1)}
-                    </Text>
-                  </View>
-                )}
-                <Ionicons name="chevron-forward" size={16} color="#b7c9bf" />
-              </View>
-            </TouchableOpacity>
-          ))
+          <VideosLista
+            procs={procs}
+            onSelect={(pid) => router.push(`/(app)/procesamiento/${pid}`)}
+          />
         )}
       </View>
 
