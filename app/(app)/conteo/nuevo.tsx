@@ -40,11 +40,11 @@ const MAX_GRID_HEIGHT =
 
 export default function NuevoConteoScreen() {
   const router = useRouter();
-  const { cultivo_id, conteo_id } = useLocalSearchParams<{
-    cultivo_id: string;
+  const { campo_cultivo_id, conteo_id } = useLocalSearchParams<{
+    campo_cultivo_id: string;
     conteo_id?: string;
   }>();
-  const cultivoId = Number(cultivo_id);
+  const cultivoId = Number(campo_cultivo_id);
 
   const [paso, setPaso] = useState<"configurar" | "subir">("configurar");
   const [variedades, setVariedades] = useState<Variedad[]>([]);
@@ -104,7 +104,7 @@ export default function NuevoConteoScreen() {
       if (modoConteo === "nuevo") {
         if (!variedadId) return Alert.alert("Selecciona una variedad");
         conteo = await crearConteo({
-          cultivo_id: cultivoId,
+          campo_cultivo_id: cultivoId,
           variedad_id: variedadId,
         });
       } else {

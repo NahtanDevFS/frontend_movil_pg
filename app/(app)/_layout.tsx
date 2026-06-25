@@ -25,9 +25,9 @@ export default function AppLayout() {
         ),
       }}
     >
-      <Stack.Screen name="index" options={{ title: "Mis Cultivos" }} />
+      <Stack.Screen name="index" options={{ title: "Campos de cultivo" }} />
       <Stack.Screen name="cultivo/[id]" options={{ title: "Conteos" }} />
-      <Stack.Screen name="conteo/nuevo" options={{ title: "Nuevo Conteo" }} />
+      <Stack.Screen name="conteo/nuevo" options={{ title: "Nuevo conteo" }} />
       <Stack.Screen name="conteo/[id]" options={{ title: "Detalle" }} />
       <Stack.Screen
         name="procesamiento/[id]"

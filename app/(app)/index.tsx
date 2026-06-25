@@ -81,7 +81,8 @@ export default function CultivosScreen() {
         }
         ListHeaderComponent={
           <Text style={styles.listHeader}>
-            {cultivos.length} cultivo{cultivos.length !== 1 ? "s" : ""} asignado
+            {cultivos.length} campo de cultivo{cultivos.length !== 1 ? "s" : ""}{" "}
+            asignado
             {cultivos.length !== 1 ? "s" : ""}
           </Text>
         }

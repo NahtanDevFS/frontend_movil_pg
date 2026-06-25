@@ -67,7 +67,7 @@ export const getConteo = async (conteoId: number): Promise<Conteo> => {
 };
 
 export const crearConteo = async (data: {
-  cultivo_id: number;
+  campo_cultivo_id: number;
   variedad_id: number;
 }): Promise<Conteo> => {
   const res = await client.post("/conteos/", data);

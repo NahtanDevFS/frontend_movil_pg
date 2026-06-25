@@ -41,14 +41,16 @@ export interface Cultivo {
 //Conteos
 export interface Conteo {
   id: number;
-  cultivo_id: number;
+  campo_cultivo_id: number;
   variedad_id: number;
   estado_id: number;
   fecha_conteo: string;
   total_surcos: number;
   conteo_total_acumulado: number;
-  nivel_confiabilidad_agregado: "alto" | "moderado" | "bajo" | null;
+  // nivel derivado por el backend a partir de las métricas agregadas de la sesión
+  nivel_confiabilidad: "alto" | "moderado" | "bajo" | null;
   promedio_confianza_sesion: number | null;
+  porcentaje_baja_confianza_sesion: number | null;
   observaciones: string | null;
   activo: boolean;
   created_at: string;
@@ -63,12 +65,10 @@ export interface ResultadoIa {
   tiempo_procesamiento_seg: number | null;
   promedio_confianza: number | null;
   porcentaje_baja_confianza: number | null;
-  porcentaje_ocluidos: number | null;
+  // nivel derivado por el backend a partir de las métricas de este video
   nivel_confiabilidad: "alto" | "moderado" | "bajo" | null;
   total_frames_procesados: number | null;
-  total_detecciones_brutas: number | null;
 }
-
 export interface ProcesamientoVideo {
   id: number;
   conteo_id: number;

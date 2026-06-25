@@ -74,7 +74,7 @@ export default function ConteoDetalleScreen() {
       ]);
       setConteo(c);
       setProcs(ps);
-      setCultivo(cultivos.find((cu) => cu.id === c.cultivo_id) ?? null);
+      setCultivo(cultivos.find((cu) => cu.id === c.campo_cultivo_id) ?? null);
       try {
         const cals = await getCalibresPorVariedad(c.variedad_id);
         setCalibres(cals);
@@ -254,7 +254,7 @@ export default function ConteoDetalleScreen() {
   if (!conteo) return null;
 
   const completado = conteo.estado_id === 2;
-  const nivel = conteo.nivel_confiabilidad_agregado;
+  const nivel = conteo.nivel_confiabilidad;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -354,7 +354,7 @@ export default function ConteoDetalleScreen() {
                 router.push({
                   pathname: "/(app)/conteo/nuevo",
                   params: {
-                    cultivo_id: conteo.cultivo_id,
+                    campo_cultivo_id: conteo.campo_cultivo_id,
                     conteo_id: conteoId,
                   },
                 })

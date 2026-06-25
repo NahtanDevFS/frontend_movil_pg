@@ -257,7 +257,7 @@ export default function CultivoDetalleScreen() {
             onPress={() =>
               router.push({
                 pathname: "/(app)/conteo/nuevo",
-                params: { cultivo_id: cultivoId },
+                params: { campo_cultivo_id: cultivoId },
               })
             }
             activeOpacity={0.85}
@@ -312,23 +312,22 @@ export default function CultivoDetalleScreen() {
               )}
             </View>
             <View style={styles.cardRight}>
-              {item.nivel_confiabilidad_agregado && (
+              {item.nivel_confiabilidad && (
                 <View
                   style={[
                     styles.badge,
                     {
-                      backgroundColor:
-                        CONF_BG[item.nivel_confiabilidad_agregado],
+                      backgroundColor: CONF_BG[item.nivel_confiabilidad],
                     },
                   ]}
                 >
                   <Text
                     style={[
                       styles.badgeText,
-                      { color: CONF_COLOR[item.nivel_confiabilidad_agregado] },
+                      { color: CONF_COLOR[item.nivel_confiabilidad] },
                     ]}
                   >
-                    {item.nivel_confiabilidad_agregado}
+                    {item.nivel_confiabilidad}
                   </Text>
                 </View>
               )}
