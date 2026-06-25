@@ -137,19 +137,30 @@ export const registrarProcesamiento = async (data: {
   return res.data;
 };
 
-//sube el archivo en background con expo-file-system
-export const subirVideoBackground = async (
+// Resultado de iniciar una subida: la promesa que resuelve/rechaza al
+// terminar, y una función para cancelarla manualmente.
+export interface SubidaControlada {
+  promise: Promise<void>;
+  cancelar: () => Promise<void>;
+}
+
+// Timeout de subida: si los bytes enviados no avanzan en este tiempo, se aborta.
+const SUBIDA_TIMEOUT_SIN_AVANCE_MS = 5 * 60 * 1000; // 5 minutos
+
+export const subirVideoBackground = (
   procesamientoId: number,
   videoUri: string,
   token: string,
   onProgress?: (pct: number) => void,
-): Promise<void> => {
+): SubidaControlada => {
   const apiUrl =
     (Constants.expoConfig?.extra?.apiUrl as string | undefined) ??
     "http://localhost:8000";
   const uploadUrl = `${apiUrl}/procesamientos/${procesamientoId}/video`;
 
-  console.log("Subiendo a:", uploadUrl); // eliminar después de confirmar
+  let cancelado = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let ultimoBytes = 0;
 
   const task = FileSystem.createUploadTask(
     uploadUrl,
@@ -160,23 +171,100 @@ export const subirVideoBackground = async (
       fieldName: "video",
       headers: {
         Authorization: `Bearer ${token}`,
-        "ngrok-skip-browser-warning": "true", // ← necesario para ngrok
+        "ngrok-skip-browser-warning": "true",
       },
     },
     (progress) => {
-      if (onProgress && progress.totalBytesExpectedToSend > 0) {
-        const pct = Math.round(
-          (progress.totalBytesSent / progress.totalBytesExpectedToSend) * 100,
-        );
-        onProgress(pct);
+      if (progress.totalBytesExpectedToSend > 0) {
+        // Reinicia el timeout cada vez que avanzan los bytes
+        if (progress.totalBytesSent > ultimoBytes) {
+          ultimoBytes = progress.totalBytesSent;
+          reiniciarTimeout();
+        }
+        if (onProgress) {
+          const pct = Math.round(
+            (progress.totalBytesSent / progress.totalBytesExpectedToSend) * 100,
+          );
+          onProgress(pct);
+        }
       }
     },
   );
 
-  const result = await task.uploadAsync();
-  if (!result || result.status >= 400) {
-    throw new Error(`Error al subir el video. Status: ${result?.status}`);
-  }
+  const limpiarTimeout = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
+
+  // Promesa de timeout: rechaza si pasa demasiado sin avance
+  let rechazarPorTimeout: ((e: Error) => void) | null = null;
+  const reiniciarTimeout = () => {
+    limpiarTimeout();
+    timer = setTimeout(async () => {
+      cancelado = true;
+      try {
+        await task.cancelAsync();
+      } catch {
+        // ignorar
+      }
+      if (rechazarPorTimeout) {
+        rechazarPorTimeout(
+          new Error(
+            "La subida se detuvo: no hubo avance en 5 minutos. Revisa tu conexión e inténtalo de nuevo.",
+          ),
+        );
+      }
+    }, SUBIDA_TIMEOUT_SIN_AVANCE_MS);
+  };
+
+  const promise = new Promise<void>((resolve, reject) => {
+    rechazarPorTimeout = reject;
+    reiniciarTimeout(); // arranca el contador
+    task
+      .uploadAsync()
+      .then((result) => {
+        limpiarTimeout();
+        if (cancelado) {
+          reject(new Error("Subida cancelada."));
+          return;
+        }
+        if (!result || result.status >= 400) {
+          reject(
+            new Error(`Error al subir el video. Status: ${result?.status}`),
+          );
+          return;
+        }
+        resolve();
+      })
+      .catch((err) => {
+        limpiarTimeout();
+        if (cancelado) {
+          reject(new Error("Subida cancelada."));
+        } else {
+          reject(err);
+        }
+      });
+  });
+
+  const cancelar = async () => {
+    cancelado = true;
+    limpiarTimeout();
+    try {
+      await task.cancelAsync();
+    } catch {
+      // ignorar
+    }
+  };
+
+  return { promise, cancelar };
+};
+
+// Cancela/anula un procesamiento (operador dueño, solo pendiente/procesando)
+export const cancelarProcesamiento = async (procesamientoId: number) => {
+  const res = await client.patch(`/procesamientos/${procesamientoId}/cancelar`);
+  return res.data;
 };
 
 export const ajustarConteo = async (

@@ -9,7 +9,7 @@ import {
   Alert,
   TextInput,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
@@ -20,6 +20,7 @@ import {
   getConteo,
   getComparacionAnterior,
   getProgreso,
+  cancelarProcesamiento,
 } from "../../../src/api/endpoints";
 import { TOKEN_KEY } from "../../../src/api/client";
 import {
@@ -49,6 +50,7 @@ const CONF_LABEL: Record<string, string> = {
 export default function ProcesamientoScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const procId = Number(id);
+  const router = useRouter();
 
   const [proc, setProc] = useState<ProcesamientoVideo | null>(null);
   const [conteo, setConteo] = useState<Conteo | null>(null);
@@ -68,6 +70,7 @@ export default function ProcesamientoScreen() {
   const [obsAjuste, setObsAjuste] = useState("");
   const [guardandoAjuste, setGuardandoAjuste] = useState(false);
   const [descargando, setDescargando] = useState(false);
+  const [cancelando, setCancelando] = useState(false);
   const [generandoPdf, setGenerandoPdf] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -134,6 +137,35 @@ export default function ProcesamientoScreen() {
     }
   };
 
+  const handleCancelarProcesamiento = () => {
+    Alert.alert(
+      "Cancelar procesamiento",
+      "¿Seguro que deseas cancelar este procesamiento? Su rango de surcos quedará libre.",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Sí, cancelar",
+          style: "destructive",
+          onPress: async () => {
+            setCancelando(true);
+            try {
+              await cancelarProcesamiento(procId);
+              if (pollRef.current) clearInterval(pollRef.current);
+              await cargar();
+            } catch (err: any) {
+              Alert.alert(
+                "Error",
+                err.response?.data?.detail ?? "No se pudo cancelar.",
+              );
+            } finally {
+              setCancelando(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const handleDescargarVideo = async () => {
     if (!proc?.video_anotado_url)
       return Alert.alert("Sin video", "El video anotado no está disponible.");
@@ -163,8 +195,42 @@ export default function ProcesamientoScreen() {
     );
 
   if (procesando || !proc?.resultado) {
+    const estado = proc?.estado_nombre;
+
+    // Estado terminal sin resultado: cancelado o error -> no seguir "procesando"
+    if (estado === "cancelado" || estado === "error") {
+      return (
+        <View style={styles.centered}>
+          <Ionicons
+            name={estado === "cancelado" ? "close-circle" : "alert-circle"}
+            size={56}
+            color={estado === "cancelado" ? "#8fa898" : "#991b1b"}
+          />
+          <Text style={styles.procesandoTitle}>
+            {estado === "cancelado"
+              ? "Procesamiento cancelado"
+              : "El procesamiento falló"}
+          </Text>
+          <Text style={styles.procesandoSub}>
+            {estado === "cancelado"
+              ? "Este video fue cancelado. Su rango de surcos quedó libre para volver a intentarlo."
+              : "Ocurrió un error al procesar el video. Puedes registrar el video nuevamente."}
+          </Text>
+          <TouchableOpacity
+            style={styles.btnVolver}
+            onPress={() => router.back()}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.btnVolverText}>Volver</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     const hayBarra = progreso?.disponible && progreso.progreso_pct > 0;
     const hayParcial = progreso?.disponible;
+    // Se puede cancelar mientras está pendiente o procesando
+    const puedeCancelar = estado === "pendiente" || estado === "procesando";
 
     return (
       <View style={styles.centered}>
@@ -204,6 +270,30 @@ export default function ProcesamientoScreen() {
         <Text style={styles.procesandoHint}>
           Esta pantalla se actualiza automáticamente.
         </Text>
+
+        {puedeCancelar && (
+          <TouchableOpacity
+            style={styles.btnCancelarProc}
+            onPress={handleCancelarProcesamiento}
+            disabled={cancelando}
+            activeOpacity={0.85}
+          >
+            {cancelando ? (
+              <ActivityIndicator size="small" color="#991b1b" />
+            ) : (
+              <>
+                <Ionicons
+                  name="close-circle-outline"
+                  size={16}
+                  color="#991b1b"
+                />
+                <Text style={styles.btnCancelarProcText}>
+                  Cancelar procesamiento
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
@@ -539,4 +629,27 @@ const styles = StyleSheet.create({
     minWidth: 36,
     textAlign: "right",
   },
+  btnCancelarProc: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 20,
+    paddingVertical: 11,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#fca5a5",
+    backgroundColor: "#fee2e2",
+    minWidth: 200,
+  },
+  btnCancelarProcText: { fontSize: 14, fontWeight: "700", color: "#991b1b" },
+  btnVolver: {
+    marginTop: 20,
+    paddingVertical: 11,
+    paddingHorizontal: 28,
+    borderRadius: 10,
+    backgroundColor: "#2d6a4f",
+  },
+  btnVolverText: { fontSize: 14, fontWeight: "700", color: "#fff" },
 });

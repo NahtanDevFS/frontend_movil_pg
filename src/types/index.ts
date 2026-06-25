@@ -87,11 +87,14 @@ export interface ResultadoIa {
   nivel_confiabilidad: "alto" | "moderado" | "bajo" | null;
   total_frames_procesados: number | null;
 }
+
 export interface ProcesamientoVideo {
   id: number;
   conteo_id: number;
   usuario_id: number;
   estado_id: number;
+  // nombre legible del estado: 'pendiente' | 'procesando' | 'completado' | 'error' | 'cancelado'
+  estado_nombre: string | null;
   surco_inicio: number;
   surco_fin: number;
   video_original_url: string;

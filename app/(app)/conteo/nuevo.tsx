@@ -20,6 +20,7 @@ import {
   getProcesamientosPorConteo,
   registrarProcesamiento,
   subirVideoBackground,
+  cancelarProcesamiento,
 } from "../../../src/api/endpoints";
 import { Variedad, Conteo } from "../../../src/types";
 import * as SecureStore from "expo-secure-store";
@@ -64,6 +65,13 @@ export default function NuevoConteoScreen() {
   );
   const [totalSurcos, setTotalSurcos] = useState(0);
   const [creandoNuevo, setCreandoNuevo] = useState(false);
+
+  // Estado de subida (opción a: barra visible, cancelable)
+  const [subiendo, setSubiendo] = useState(false);
+  const [progresoSubida, setProgresoSubida] = useState(0);
+  const cancelarSubidaRef = useState<{ fn: (() => Promise<void>) | null }>({
+    fn: null,
+  })[0];
 
   useEffect(() => {
     const init = async () => {
@@ -148,6 +156,9 @@ export default function NuevoConteoScreen() {
     }
 
     try {
+      setSubiendo(true);
+      setProgresoSubida(0);
+
       const proc = await registrarProcesamiento({
         conteo_id: conteoSeleccionado.id,
         surco_inicio: inicio,
@@ -155,23 +166,64 @@ export default function NuevoConteoScreen() {
         fecha_grabacion: new Date().toISOString(),
       });
 
-      router.replace(`/(app)/procesamiento/${proc.id}`);
-
       const token = (await SecureStore.getItemAsync(TOKEN_KEY)) ?? "";
-      subirVideoBackground(proc.id, videoFile.uri, token, (pct) => {
-        console.log(`Subida ${pct}%`);
-      }).catch((err) => {
-        Alert.alert(
-          "Error al subir",
-          `mensaje: ${err?.message}\ncódigo: ${err?.code}\ntipo: ${typeof err}\n${String(err)}`,
-        );
-      });
+      const subida = subirVideoBackground(
+        proc.id,
+        videoFile.uri,
+        token,
+        (pct) => setProgresoSubida(pct),
+      );
+      // Guardar el cancelador para el botón
+      cancelarSubidaRef.fn = subida.cancelar;
+
+      try {
+        // Opción (a): esperamos a que termine la subida mostrando la barra.
+        await subida.promise;
+        // Subida completa -> ahora sí navegamos a la pantalla de procesamiento
+        setSubiendo(false);
+        cancelarSubidaRef.fn = null;
+        router.replace(`/(app)/procesamiento/${proc.id}`);
+      } catch (errSubida: any) {
+        // Falló o se canceló la subida. El procesamiento quedó registrado pero
+        // sin video; lo cancelamos para que no quede colgado y libere surcos.
+        setSubiendo(false);
+        cancelarSubidaRef.fn = null;
+        try {
+          await cancelarProcesamiento(proc.id);
+        } catch {
+          // si falla la cancelación, no bloqueamos al usuario
+        }
+        const msg: string = errSubida?.message ?? "No se pudo subir el video.";
+        if (msg !== "Subida cancelada.") {
+          Alert.alert("Error al subir", msg);
+        }
+      }
     } catch (err: any) {
+      setSubiendo(false);
       Alert.alert(
         "Error",
         err.response?.data?.detail ?? "No se pudo registrar el video.",
       );
     }
+  };
+
+  const handleCancelarSubida = () => {
+    Alert.alert(
+      "Cancelar subida",
+      "¿Seguro que deseas cancelar la subida del video?",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Sí, cancelar",
+          style: "destructive",
+          onPress: async () => {
+            if (cancelarSubidaRef.fn) {
+              await cancelarSubidaRef.fn();
+            }
+          },
+        },
+      ],
+    );
   };
 
   if (loadingConfig)
@@ -474,18 +526,51 @@ export default function NuevoConteoScreen() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            style={[
-              styles.btnPrimary,
-              (!videoFile || !surcoInicio || !surcoFin) && styles.btnDisabled,
-            ]}
-            onPress={handleSubir}
-            disabled={!videoFile || !surcoInicio || !surcoFin}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="cloud-upload-outline" size={16} color="#fff" />
-            <Text style={styles.btnPrimaryText}>Subir y procesar con IA</Text>
-          </TouchableOpacity>
+          {subiendo ? (
+            <View style={styles.subidaBox}>
+              <View style={styles.subidaHeader}>
+                <ActivityIndicator size="small" color="#2d6a4f" />
+                <Text style={styles.subidaTitle}>
+                  Subiendo video... {progresoSubida}%
+                </Text>
+              </View>
+              <View style={styles.barraTrack}>
+                <View
+                  style={[styles.barraFill, { width: `${progresoSubida}%` }]}
+                />
+              </View>
+              <Text style={styles.subidaHint}>
+                No cierres esta pantalla hasta que termine la subida.
+              </Text>
+              <TouchableOpacity
+                style={styles.btnCancelarSubida}
+                onPress={handleCancelarSubida}
+                activeOpacity={0.85}
+              >
+                <Ionicons
+                  name="close-circle-outline"
+                  size={16}
+                  color="#991b1b"
+                />
+                <Text style={styles.btnCancelarSubidaText}>
+                  Cancelar subida
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[
+                styles.btnPrimary,
+                (!videoFile || !surcoInicio || !surcoFin) && styles.btnDisabled,
+              ]}
+              onPress={handleSubir}
+              disabled={!videoFile || !surcoInicio || !surcoFin}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="cloud-upload-outline" size={16} color="#fff" />
+              <Text style={styles.btnPrimaryText}>Subir y procesar con IA</Text>
+            </TouchableOpacity>
+          )}
         </>
       )}
     </ScrollView>
@@ -647,4 +732,38 @@ const styles = StyleSheet.create({
   btnSecondaryText: { fontSize: 13, fontWeight: "600", color: "#5a7a6a" },
   btnBack: { flexDirection: "row", alignItems: "center", gap: 6, padding: 8 },
   btnBackText: { fontSize: 13, color: "#5a7a6a" },
+  subidaBox: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#dde8e2",
+    padding: 16,
+    gap: 12,
+  },
+  subidaHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  subidaTitle: { fontSize: 15, fontWeight: "700", color: "#1a2e25" },
+  barraTrack: {
+    height: 10,
+    borderRadius: 6,
+    backgroundColor: "#e8f0eb",
+    overflow: "hidden",
+  },
+  barraFill: {
+    height: "100%",
+    borderRadius: 6,
+    backgroundColor: "#2d6a4f",
+  },
+  subidaHint: { fontSize: 12, color: "#8fa898", lineHeight: 16 },
+  btnCancelarSubida: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#fca5a5",
+    backgroundColor: "#fee2e2",
+  },
+  btnCancelarSubidaText: { fontSize: 14, fontWeight: "700", color: "#991b1b" },
 });
