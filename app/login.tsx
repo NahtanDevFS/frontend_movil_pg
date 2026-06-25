@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../src/context/AuthContext";
@@ -50,11 +51,13 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <View style={styles.logoBox}>
-            <Ionicons name="leaf" size={32} color="#ffffff" />
-          </View>
+          <Image
+            source={require("../assets/icon.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <Text style={styles.appName}>MelonCount</Text>
-          <Text style={styles.appSubtitle}>Amadeo Export S.A.</Text>
+          <Text style={styles.appSubtitle}>Amadeo Export, S.A.</Text>
         </View>
 
         <View style={styles.card}>
@@ -126,10 +129,14 @@ export default function LoginScreen() {
               <Text style={styles.btnText}>Iniciar sesión</Text>
             )}
           </TouchableOpacity>
+
+          <Text style={styles.forgotPasswordText}>
+            Si olvidó su contraseña, comuníquese con administración del sistema.
+          </Text>
         </View>
 
         <Text style={styles.footer}>
-          Acceso exclusivo para operadores de campo
+          Acceso exclusivo para operadores de campo y personal autorizado
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -145,15 +152,14 @@ const styles = StyleSheet.create({
     paddingVertical: 48,
   },
   header: { alignItems: "center", marginBottom: 32 },
-  logoBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: "#2d6a4f",
-    justifyContent: "center",
-    alignItems: "center",
+
+  logo: {
+    width: 80,
+    height: 80,
     marginBottom: 14,
+    borderRadius: 16,
   },
+
   appName: {
     fontSize: 24,
     fontWeight: "700",
@@ -173,6 +179,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#1a2e25",
     marginBottom: 20,
+    textAlign: "center",
   },
   fieldGroup: { marginBottom: 16 },
   label: {
@@ -209,6 +216,15 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+
+  forgotPasswordText: {
+    textAlign: "center",
+    color: "#5a7a6a",
+    marginTop: 20,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+
   footer: {
     textAlign: "center",
     color: "#8fa898",
