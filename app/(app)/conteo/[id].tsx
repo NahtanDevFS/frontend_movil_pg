@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   TextInput,
+  RefreshControl,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -64,6 +65,7 @@ export default function ConteoDetalleScreen() {
   const [totalMuestreo, setTotalMuestreo] = useState("100");
   const [cantidades, setCantidades] = useState<Record<number, string>>({});
   const [guardandoMuestreo, setGuardandoMuestreo] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const cargar = useCallback(async () => {
     try {
@@ -104,6 +106,12 @@ export default function ConteoDetalleScreen() {
 
   useEffect(() => {
     cargar();
+  }, [cargar]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await cargar();
+    setRefreshing(false);
   }, [cargar]);
 
   //logica de cobertura
@@ -257,7 +265,18 @@ export default function ConteoDetalleScreen() {
   const nivel = conteo.nivel_confiabilidad;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={["#2d6a4f"]}
+          tintColor="#2d6a4f"
+        />
+      }
+    >
       {/* Hero */}
       <View style={styles.hero}>
         <View>

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
+  RefreshControl,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -68,6 +69,8 @@ export default function ProcesamientoScreen() {
 
   const [conteoAjustado, setConteoAjustado] = useState("");
   const [obsAjuste, setObsAjuste] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+
   const [guardandoAjuste, setGuardandoAjuste] = useState(false);
   const [descargando, setDescargando] = useState(false);
   const [cancelando, setCancelando] = useState(false);
@@ -112,6 +115,12 @@ export default function ProcesamientoScreen() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
+  }, [cargar]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await cargar();
+    setRefreshing(false);
   }, [cargar]);
 
   const handleGuardarAjuste = async () => {
@@ -311,7 +320,18 @@ export default function ProcesamientoScreen() {
   const nivel = resultado.nivel_confiabilidad;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={["#2d6a4f"]}
+          tintColor="#2d6a4f"
+        />
+      }
+    >
       {/* Hero */}
       <View style={styles.hero}>
         <Text style={styles.heroLabel}>MELONES DETECTADOS</Text>
