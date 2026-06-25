@@ -61,6 +61,7 @@ export interface Conteo {
   id: number;
   campo_cultivo_id: number;
   variedad_id: number;
+  variedad_nombre: string | null;
   estado_id: number;
   fecha_conteo: string;
   total_surcos: number;

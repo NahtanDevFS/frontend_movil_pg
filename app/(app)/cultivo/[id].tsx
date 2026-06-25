@@ -308,6 +308,9 @@ export default function CultivoDetalleScreen() {
                   year: "numeric",
                 })}
               </Text>
+              {item.variedad_nombre && (
+                <Text style={styles.cardVariedad}>{item.variedad_nombre}</Text>
+              )}
               {item.conteo_total_acumulado > 0 && (
                 <Text style={styles.cardTotal}>
                   {item.conteo_total_acumulado.toLocaleString()}{" "}
@@ -316,42 +319,46 @@ export default function CultivoDetalleScreen() {
               )}
             </View>
             <View style={styles.cardRight}>
-              {item.nivel_confiabilidad && (
+              <View style={styles.cardBadges}>
+                {item.nivel_confiabilidad && (
+                  <View
+                    style={[
+                      styles.badge,
+                      {
+                        backgroundColor: CONF_BG[item.nivel_confiabilidad],
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.badgeText,
+                        { color: CONF_COLOR[item.nivel_confiabilidad] },
+                      ]}
+                    >
+                      Confianza IA:{" "}
+                      {item.nivel_confiabilidad.charAt(0).toUpperCase() +
+                        item.nivel_confiabilidad.slice(1)}
+                    </Text>
+                  </View>
+                )}
                 <View
                   style={[
                     styles.badge,
                     {
-                      backgroundColor: CONF_BG[item.nivel_confiabilidad],
+                      backgroundColor:
+                        item.estado_id === 2 ? "#d1fae5" : "#fff3cd",
                     },
                   ]}
                 >
                   <Text
                     style={[
                       styles.badgeText,
-                      { color: CONF_COLOR[item.nivel_confiabilidad] },
+                      { color: item.estado_id === 2 ? "#065f46" : "#856404" },
                     ]}
                   >
-                    {item.nivel_confiabilidad}
+                    {item.estado_id === 2 ? "Completado" : "En progreso"}
                   </Text>
                 </View>
-              )}
-              <View
-                style={[
-                  styles.badge,
-                  {
-                    backgroundColor:
-                      item.estado_id === 2 ? "#d1fae5" : "#fff3cd",
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.badgeText,
-                    { color: item.estado_id === 2 ? "#065f46" : "#856404" },
-                  ]}
-                >
-                  {item.estado_id === 2 ? "Completado" : "En progreso"}
-                </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color="#b7c9bf" />
             </View>
@@ -457,9 +464,11 @@ const styles = StyleSheet.create({
   },
   cardLeft: { gap: 4 },
   cardFecha: { fontSize: 13, fontWeight: "600", color: "#1a2e25" },
+  cardVariedad: { fontSize: 12, color: "#5a7a6a", fontStyle: "italic" },
   cardTotal: { fontSize: 22, fontWeight: "800", color: "#2d6a4f" },
   cardTotalUnit: { fontSize: 13, fontWeight: "400", color: "#5a7a6a" },
   cardRight: { flexDirection: "row", alignItems: "center", gap: 6 },
+  cardBadges: { alignItems: "flex-end", gap: 5 },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   badgeText: { fontSize: 11, fontWeight: "700" },
   emptyBox: {

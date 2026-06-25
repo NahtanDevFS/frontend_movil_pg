@@ -313,12 +313,32 @@ export default function ConteoDetalleScreen() {
               ]}
             >
               <Text style={[styles.badgeText, { color: CONF_COLOR[nivel] }]}>
-                {nivel}
+                Confianza IA: {nivel.charAt(0).toUpperCase() + nivel.slice(1)}
               </Text>
             </View>
           )}
         </View>
       </View>
+
+      {/* Descripción del nivel de confianza (fila completa, legible) */}
+      {nivel && (
+        <View style={styles.confianzaCard}>
+          <Text style={styles.confianzaTitulo}>
+            Nivel de confianza:{" "}
+            <Text style={{ color: CONF_COLOR[nivel] }}>
+              {nivel.charAt(0).toUpperCase() + nivel.slice(1)}
+            </Text>
+          </Text>
+          {conteo.porcentaje_baja_confianza_sesion != null && (
+            <Text style={styles.confianzaDesc}>
+              {Math.round((1 - conteo.porcentaje_baja_confianza_sesion) * 100)}%
+              de detecciones con alta confianza,{" "}
+              {Math.round(conteo.porcentaje_baja_confianza_sesion * 100)}% con
+              baja confianza.
+            </Text>
+          )}
+        </View>
+      )}
 
       {/* Comparación */}
       {comparacion?.hay_historial && (
@@ -423,7 +443,9 @@ export default function ConteoDetalleScreen() {
                         { color: CONF_COLOR[p.resultado.nivel_confiabilidad] },
                       ]}
                     >
-                      {p.resultado.nivel_confiabilidad}
+                      IA:{" "}
+                      {p.resultado.nivel_confiabilidad.charAt(0).toUpperCase() +
+                        p.resultado.nivel_confiabilidad.slice(1)}
                     </Text>
                   </View>
                 )}
@@ -659,6 +681,16 @@ const styles = StyleSheet.create({
   heroRight: { alignItems: "flex-end" },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   badgeText: { fontSize: 11, fontWeight: "700" },
+  confianzaCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e3ece7",
+    padding: 14,
+    gap: 4,
+  },
+  confianzaTitulo: { fontSize: 14, fontWeight: "700", color: "#1a2e25" },
+  confianzaDesc: { fontSize: 13, color: "#5a7a6a", lineHeight: 18 },
   comparCard: {
     backgroundColor: "#fff",
     borderRadius: 12,
