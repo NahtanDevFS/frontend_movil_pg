@@ -199,43 +199,137 @@ export default function ConteoDetalleScreen() {
     if (!conteo || !cultivo) return;
     setGenerandoPdf(true);
     try {
+      // Estilos compartidos por ambas tablas (inline porque el motor de
+      // impresión no siempre respeta <style> en <head>)
+      const thStyle =
+        "padding:9px 8px;background:#2d6a4f;color:#fff;font-size:12px;font-weight:700;text-align:center;border:1px solid #2d6a4f";
+      const tdStyle =
+        "padding:8px;font-size:13px;text-align:center;border:1px solid #dde8e2;color:#1a2e25";
+      const tdStrong =
+        "padding:8px;font-size:13px;text-align:center;border:1px solid #dde8e2;color:#2d6a4f;font-weight:700";
+      // Evita que una fila se parta entre dos páginas
+      const trKeep = "page-break-inside:avoid";
+
       const videosHtml = procs
         .filter((p) => p.resultado)
         .map(
-          (p) => `
-        <tr><td>${p.surco_inicio}–${p.surco_fin}</td>
-        <td>${p.resultado!.conteo_ia.toLocaleString()}</td>
-        <td>${p.resultado!.conteo_ajustado?.toLocaleString() ?? "—"}</td>
-        <td><b>${(p.resultado!.conteo_ajustado ?? p.resultado!.conteo_ia).toLocaleString()}</b></td></tr>`,
+          (p, i) => `
+        <tr style="${trKeep};background:${i % 2 === 0 ? "#ffffff" : "#f4f7f5"}">
+          <td style="${tdStyle}">${p.surco_inicio}–${p.surco_fin}</td>
+          <td style="${tdStyle}">${p.resultado!.conteo_ia.toLocaleString()}</td>
+          <td style="${tdStyle}">${p.resultado!.conteo_ajustado?.toLocaleString() ?? "—"}</td>
+          <td style="${tdStrong}">${(p.resultado!.conteo_ajustado ?? p.resultado!.conteo_ia).toLocaleString()}</td>
+        </tr>`,
         )
         .join("");
+
+      // Bloque de confianza (si hay datos)
+      const nivel = conteo.nivel_confiabilidad;
+      const confColor =
+        nivel === "alto"
+          ? "#065f46"
+          : nivel === "moderado"
+            ? "#856404"
+            : "#991b1b";
+      const confBg =
+        nivel === "alto"
+          ? "#d1fae5"
+          : nivel === "moderado"
+            ? "#fff3cd"
+            : "#fee2e2";
+      const nivelCap = nivel
+        ? nivel.charAt(0).toUpperCase() + nivel.slice(1)
+        : null;
+      const confianzaHtml = nivel
+        ? `
+        <div style="page-break-inside:avoid;background:${confBg};border-radius:10px;padding:14px 16px;margin:20px 0">
+          <p style="margin:0;font-weight:700;color:${confColor};font-size:14px">
+            Nivel de confianza IA: ${nivelCap}
+          </p>
+          ${
+            conteo.porcentaje_baja_confianza_sesion != null
+              ? `<p style="margin:6px 0 0;font-size:12px;color:#5a7a6a">
+                  ${Math.round((1 - conteo.porcentaje_baja_confianza_sesion) * 100)}% de detecciones con alta confianza,
+                  ${Math.round(conteo.porcentaje_baja_confianza_sesion * 100)}% con baja confianza.
+                </p>`
+              : ""
+          }
+        </div>`
+        : "";
+
+      // Bloque de comparación con ciclo anterior (si hay historial)
+      const comparacionHtml =
+        comparacion?.hay_historial && comparacion.conteo_anterior_total != null
+          ? `
+        <div style="page-break-inside:avoid;background:#f4f7f5;border-radius:10px;padding:14px 16px;margin:20px 0">
+          <p style="margin:0;font-size:11px;color:#5a7a6a;text-transform:uppercase;letter-spacing:1px">Comparación con ciclo anterior</p>
+          <p style="margin:8px 0 0;font-size:14px;color:#1a2e25">
+            Ciclo anterior: <b>${comparacion.conteo_anterior_total.toLocaleString()}</b> melones
+          </p>
+          ${
+            comparacion.variacion_porcentual != null
+              ? `<p style="margin:6px 0 0;font-size:14px;color:${comparacion.variacion_porcentual >= 0 ? "#065f46" : "#991b1b"}">
+                  Variación: ${comparacion.variacion_porcentual >= 0 ? "+" : ""}${comparacion.variacion_porcentual.toFixed(1)}% respecto al ciclo actual
+                </p>`
+              : ""
+          }
+        </div>`
+          : "";
+
       const calibresHtml = muestreo?.clasificaciones.length
         ? `
-        <h3>Distribución por calibre</h3>
-        <table>${muestreo.clasificaciones
-          .map(
-            (c) => `
-          <tr><td>${c.nombre_calibre}</td><td>${c.porcentaje.toFixed(1)}%</td><td><b>${c.cantidad_extrapolada.toLocaleString()}</b></td></tr>`,
-          )
-          .join("")}
+        <h3 style="color:#2d6a4f;margin-top:28px">Distribución por calibre</h3>
+        <table style="width:100%;border-collapse:collapse;margin-top:8px">
+          <thead style="display:table-header-group">
+            <tr>
+              <th style="${thStyle}">Calibre</th>
+              <th style="${thStyle}">Porcentaje</th>
+              <th style="${thStyle}">Melones estimados</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${muestreo.clasificaciones
+              .map(
+                (c, i) => `
+              <tr style="${trKeep};background:${i % 2 === 0 ? "#ffffff" : "#f4f7f5"}">
+                <td style="${tdStyle}">${c.nombre_calibre}</td>
+                <td style="${tdStyle}">${c.porcentaje.toFixed(1)}%</td>
+                <td style="${tdStrong}">${c.cantidad_extrapolada.toLocaleString()}</td>
+              </tr>`,
+              )
+              .join("")}
+          </tbody>
         </table>`
         : "";
-      const html = `<html><body style="font-family:sans-serif;padding:32px;color:#1a2e25;max-width:600px;margin:0 auto">
-        <div style="background:#2d6a4f;padding:20px;border-radius:10px;color:#fff;margin-bottom:24px">
+
+      const html = `<html><head><meta name="viewport" content="width=device-width"></head>
+      <body style="font-family:sans-serif;padding:32px;color:#1a2e25;max-width:600px;margin:0 auto">
+        <div style="page-break-inside:avoid;background:#2d6a4f;padding:20px;border-radius:10px;color:#fff;margin-bottom:24px">
           <h1 style="margin:0">MelonCount</h1>
           <p style="margin:4px 0 0;opacity:0.7;font-size:12px">Sistema de Conteo Pre-cosecha · Amadeo Export S.A.</p>
         </div>
         <h2 style="color:#2d6a4f">Reporte de Conteo #${conteoId}</h2>
         <p style="color:#5a7a6a">${cultivo.nombre}${cultivo.municipio_nombre ? ' · <span style="text-transform:capitalize">' + cultivo.municipio_nombre + ", " + cultivo.departamento_nombre + "</span>" : ""}${cultivo.ubicacion ? " · " + cultivo.ubicacion : ""}</p>
-        <div style="background:#f4f7f5;border-radius:10px;padding:16px;margin:20px 0;text-align:center">
+        <div style="page-break-inside:avoid;background:#f4f7f5;border-radius:10px;padding:16px;margin:20px 0;text-align:center">
           <p style="margin:0;font-size:11px;color:#5a7a6a;text-transform:uppercase;letter-spacing:1px">Total acumulado</p>
           <p style="margin:4px 0;font-size:56px;font-weight:800;color:#2d6a4f">${conteo.conteo_total_acumulado.toLocaleString()}</p>
           <p style="margin:0;color:#5a7a6a">melones</p>
         </div>
-        <h3>Videos procesados</h3>
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <tr style="background:#e8f5ee"><th>Surcos</th><th>Conteo IA</th><th>Ajustado</th><th>Efectivo</th></tr>
-          ${videosHtml}
+        ${confianzaHtml}
+        ${comparacionHtml}
+        <h3 style="color:#2d6a4f">Videos procesados</h3>
+        <table style="width:100%;border-collapse:collapse;margin-top:8px">
+          <thead style="display:table-header-group">
+            <tr>
+              <th style="${thStyle}">Surcos</th>
+              <th style="${thStyle}">Conteo IA</th>
+              <th style="${thStyle}">Ajustado</th>
+              <th style="${thStyle}">Efectivo</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${videosHtml}
+          </tbody>
         </table>
         ${calibresHtml}
         <p style="color:#8fa898;font-size:11px;margin-top:40px;text-align:center">
