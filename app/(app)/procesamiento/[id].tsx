@@ -88,6 +88,7 @@ export default function ProcesamientoScreen() {
         setConteoAjustado(
           String(p.resultado.conteo_ajustado ?? p.resultado.conteo_ia),
         );
+        setObsAjuste(p.resultado.observaciones_ajuste ?? "");
         const comp = await getComparacionAnterior(c.id).catch(() => null);
         if (comp) setComparacion(comp);
       } else {

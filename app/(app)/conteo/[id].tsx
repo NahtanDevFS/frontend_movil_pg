@@ -212,27 +212,51 @@ export default function ConteoDetalleScreen() {
       return;
     }
 
-    Alert.alert("Marcar como completado", "Esta acción no se puede revertir.", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Confirmar",
-        style: "destructive",
-        onPress: async () => {
-          setCompletando(true);
-          try {
-            await completarConteo(conteoId);
-            await cargar();
-          } catch (err: any) {
-            Alert.alert(
-              "Error",
-              err.response?.data?.detail ?? "No se pudo completar.",
-            );
-          } finally {
-            setCompletando(false);
-          }
+    // La segmentación por calibre NO es obligatoria: si falta, solo se advierte
+    // y el operador puede completar de todos modos.
+    if (!muestreo || muestreo.clasificaciones.length === 0) {
+      Alert.alert(
+        "Sin segmentación por calibre",
+        "No has registrado la segmentación por calibre de este conteo. ¿Deseas completarlo de todos modos?",
+        [
+          { text: "Cancelar", style: "cancel" },
+          {
+            text: "Completar de todos modos",
+            style: "destructive",
+            onPress: ejecutarCompletar,
+          },
+        ],
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Marcar como completado",
+      "El conteo quedará cerrado. Si necesitas reabrirlo más adelante, un administrador puede hacerlo desde el panel web.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Confirmar",
+          style: "destructive",
+          onPress: ejecutarCompletar,
         },
-      },
-    ]);
+      ],
+    );
+  };
+
+  const ejecutarCompletar = async () => {
+    setCompletando(true);
+    try {
+      await completarConteo(conteoId);
+      await cargar();
+    } catch (err: any) {
+      Alert.alert(
+        "Error",
+        err.response?.data?.detail ?? "No se pudo completar.",
+      );
+    } finally {
+      setCompletando(false);
+    }
   };
 
   const handleGuardarMuestreo = async () => {
