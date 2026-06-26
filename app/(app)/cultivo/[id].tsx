@@ -342,11 +342,14 @@ export default function CultivoDetalleScreen() {
           >
             <View style={styles.cardLeft}>
               <Text style={styles.cardFecha}>
-                {new Date(item.fecha_conteo).toLocaleDateString("es-GT", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                })}
+                {new Date(item.fecha_conteo + "T00:00:00").toLocaleDateString(
+                  "es-GT",
+                  {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  },
+                )}
               </Text>
               {item.variedad_nombre && (
                 <Text style={styles.cardVariedad}>{item.variedad_nombre}</Text>
