@@ -55,6 +55,20 @@ export default function CultivosScreen() {
         <Text style={styles.greetingName}>{user?.nombre ?? "operador"}</Text>
       </View>
 
+      {user?.debe_cambiar_password ? (
+        <TouchableOpacity
+          style={styles.avisoPass}
+          onPress={() => router.push("/cambiar-password")}
+        >
+          <Ionicons name="lock-closed-outline" size={16} color="#856404" />
+          <Text style={styles.avisoPassText}>
+            Tu contraseña fue asignada por un administrador. Toca para
+            cambiarla.
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color="#856404" />
+        </TouchableOpacity>
+      ) : null}
+
       {error ? (
         <View style={styles.errorBox}>
           <Ionicons name="alert-circle-outline" size={16} color="#991b1b" />
@@ -166,6 +180,22 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#1a2e25",
     marginTop: 2,
+  },
+  avisoPass: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#fff3cd",
+    borderBottomWidth: 1,
+    borderBottomColor: "#ffe69c",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  avisoPassText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#856404",
+    fontWeight: "600",
   },
   listHeader: {
     fontSize: 12,

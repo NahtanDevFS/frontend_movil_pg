@@ -28,6 +28,17 @@ export const getMe = async () => {
   return res.data;
 };
 
+export const cambiarPasswordPropia = async (
+  passwordActual: string,
+  passwordNueva: string,
+) => {
+  const res = await client.patch("/usuarios/me/password", {
+    password_actual: passwordActual,
+    password_nueva: passwordNueva,
+  });
+  return res.data;
+};
+
 //Cultivos
 export const getCultivos = async (): Promise<Cultivo[]> => {
   const res = await client.get("/cultivos/");

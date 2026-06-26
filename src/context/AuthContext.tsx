@@ -7,6 +7,7 @@ import { TOKEN_KEY } from "../api/client";
 interface Usuario {
   id: number;
   nombre: string;
+  debe_cambiar_password?: boolean;
   rol_id: number;
   activo: boolean;
 }

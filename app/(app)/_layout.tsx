@@ -33,6 +33,10 @@ export default function AppLayout() {
         name="procesamiento/[id]"
         options={{ title: "Resultado" }}
       />
+      <Stack.Screen
+        name="cambiar-password"
+        options={{ title: "Cambiar contraseña" }}
+      />
     </Stack>
   );
 }
