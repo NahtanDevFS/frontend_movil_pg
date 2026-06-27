@@ -22,6 +22,7 @@ import {
   getComparacionAnterior,
   getProgreso,
   cancelarProcesamiento,
+  anularProcesamientoCompletado,
 } from "../../../src/api/endpoints";
 import { TOKEN_KEY } from "../../../src/api/client";
 import {
@@ -74,6 +75,7 @@ export default function ProcesamientoScreen() {
   const [guardandoAjuste, setGuardandoAjuste] = useState(false);
   const [descargando, setDescargando] = useState(false);
   const [cancelando, setCancelando] = useState(false);
+  const [anulando, setAnulando] = useState(false);
   const [generandoPdf, setGenerandoPdf] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -203,6 +205,39 @@ export default function ProcesamientoScreen() {
     } finally {
       setDescargando(false);
     }
+  };
+
+  const handleAnularProcesamiento = () => {
+    Alert.alert(
+      "Anular procesamiento",
+      "¿Seguro que deseas anular este procesamiento? Su conteo quedará excluido del total acumulado y el rango de surcos quedará libre.",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Sí, anular",
+          style: "destructive",
+          onPress: async () => {
+            setAnulando(true);
+            try {
+              await anularProcesamientoCompletado(procId);
+              setProc((prev) =>
+                prev ? { ...prev, estado_nombre: "cancelado" } : prev,
+              );
+              // Navegar atrás para refrescar la lista del conteo
+              router.back();
+            } catch (err: any) {
+              Alert.alert(
+                "Error",
+                err.response?.data?.detail ??
+                  "No se pudo anular el procesamiento.",
+              );
+            } finally {
+              setAnulando(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   if (loading)
@@ -469,6 +504,20 @@ export default function ProcesamientoScreen() {
             {descargando ? "Descargando..." : "Descargar video etiquetado"}
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.btnAnular, anulando && styles.btnDisabled]}
+          onPress={handleAnularProcesamiento}
+          disabled={anulando}
+        >
+          {anulando ? (
+            <ActivityIndicator size="small" color="#991b1b" />
+          ) : (
+            <>
+              <Ionicons name="trash-outline" size={18} color="#991b1b" />
+              <Text style={styles.btnAnularText}>Anular procesamiento</Text>
+            </>
+          )}
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -609,6 +658,17 @@ const styles = StyleSheet.create({
     borderColor: "#dde8e2",
   },
   btnActionText: { fontSize: 14, fontWeight: "600", color: "#1a2e25" },
+  btnAnular: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#fee2e2",
+    borderRadius: 10,
+    padding: 13,
+    borderWidth: 1,
+    borderColor: "#fca5a5",
+  },
+  btnAnularText: { fontSize: 14, fontWeight: "600", color: "#991b1b" },
   btnSecondary: {
     borderRadius: 10,
     padding: 13,
