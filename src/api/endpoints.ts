@@ -148,126 +148,192 @@ export const registrarProcesamiento = async (data: {
   return res.data;
 };
 
-// Resultado de iniciar una subida: la promesa que resuelve/rechaza al
-// terminar, y una función para cancelarla manualmente.
+// ─── Subida por chunks con retry automático ─────────────────────────────────
+
+// Tamaño de cada chunk: 5 MB
+const CHUNK_SIZE_BYTES = 5 * 1024 * 1024;
+
+// Intentos máximos por chunk antes de rendirse
+const MAX_REINTENTOS = 3;
+
+// Backoff base en ms (se duplica por cada reintento: 2s, 4s, 8s)
+const BACKOFF_BASE_MS = 2000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export interface SubidaControlada {
   promise: Promise<void>;
   cancelar: () => Promise<void>;
 }
-
-// Timeout de subida: si los bytes enviados no avanzan en este tiempo, se aborta.
-const SUBIDA_TIMEOUT_SIN_AVANCE_MS = 5 * 60 * 1000; // 5 minutos
 
 export const subirVideoBackground = (
   procesamientoId: number,
   videoUri: string,
   token: string,
   onProgress?: (pct: number) => void,
+  mimeType?: string,
 ): SubidaControlada => {
   const apiUrl =
     (Constants.expoConfig?.extra?.apiUrl as string | undefined) ??
     "http://localhost:8000";
-  const uploadUrl = `${apiUrl}/procesamientos/${procesamientoId}/video`;
 
   let cancelado = false;
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let ultimoBytes = 0;
-
-  const task = FileSystem.createUploadTask(
-    uploadUrl,
-    videoUri,
-    {
-      httpMethod: "POST",
-      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
-      fieldName: "video",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "ngrok-skip-browser-warning": "true",
-      },
-    },
-    (progress) => {
-      if (progress.totalBytesExpectedToSend > 0) {
-        // Reinicia el timeout cada vez que avanzan los bytes
-        if (progress.totalBytesSent > ultimoBytes) {
-          ultimoBytes = progress.totalBytesSent;
-          reiniciarTimeout();
-        }
-        if (onProgress) {
-          const pct = Math.round(
-            (progress.totalBytesSent / progress.totalBytesExpectedToSend) * 100,
-          );
-          onProgress(pct);
-        }
-      }
-    },
-  );
-
-  const limpiarTimeout = () => {
-    if (timer) {
-      clearTimeout(timer);
-      timer = null;
-    }
-  };
-
-  // Promesa de timeout: rechaza si pasa demasiado sin avance
-  let rechazarPorTimeout: ((e: Error) => void) | null = null;
-  const reiniciarTimeout = () => {
-    limpiarTimeout();
-    timer = setTimeout(async () => {
-      cancelado = true;
-      try {
-        await task.cancelAsync();
-      } catch {
-        // ignorar
-      }
-      if (rechazarPorTimeout) {
-        rechazarPorTimeout(
-          new Error(
-            "La subida se detuvo: no hubo avance en 5 minutos. Revisa tu conexión e inténtalo de nuevo.",
-          ),
-        );
-      }
-    }, SUBIDA_TIMEOUT_SIN_AVANCE_MS);
-  };
-
-  const promise = new Promise<void>((resolve, reject) => {
-    rechazarPorTimeout = reject;
-    reiniciarTimeout(); // arranca el contador
-    task
-      .uploadAsync()
-      .then((result) => {
-        limpiarTimeout();
-        if (cancelado) {
-          reject(new Error("Subida cancelada."));
-          return;
-        }
-        if (!result || result.status >= 400) {
-          reject(
-            new Error(`Error al subir el video. Status: ${result?.status}`),
-          );
-          return;
-        }
-        resolve();
-      })
-      .catch((err) => {
-        limpiarTimeout();
-        if (cancelado) {
-          reject(new Error("Subida cancelada."));
-        } else {
-          reject(err);
-        }
-      });
-  });
 
   const cancelar = async () => {
     cancelado = true;
-    limpiarTimeout();
-    try {
-      await task.cancelAsync();
-    } catch {
-      // ignorar
-    }
   };
+
+  const promise = (async () => {
+    // 1. Copiar al cacheDirectory para garantizar acceso con file:// en ambas plataformas.
+    //    DocumentPicker en Android devuelve content:// que readAsStringAsync no soporta.
+    const extension = (() => {
+      if (mimeType) {
+        const mimeMap: Record<string, string> = {
+          "video/mp4": "mp4",
+          "video/quicktime": "mov",
+          "video/x-msvideo": "avi",
+          "video/x-matroska": "mkv",
+          "video/mov": "mov",
+        };
+        return mimeMap[mimeType.toLowerCase()] ?? "mp4";
+      }
+      const uriLimpio = videoUri.split("?")[0];
+      const partes = uriLimpio.split(".");
+      if (partes.length > 1) {
+        const ext = partes.pop()!.toLowerCase();
+        if (["mp4", "mov", "avi", "mkv"].includes(ext)) return ext;
+      }
+      return "mp4";
+    })();
+
+    const uriLocal = `${FileSystem.cacheDirectory}upload_${procesamientoId}.${extension}`;
+    await FileSystem.copyAsync({ from: videoUri, to: uriLocal });
+
+    if (cancelado) throw new Error("Subida cancelada.");
+
+    // 2. Obtener tamaño real del archivo copiado (file:// garantiza .size correcto)
+    const info = await FileSystem.getInfoAsync(uriLocal, { size: true });
+    if (!info.exists) throw new Error("No se pudo copiar el archivo al cache.");
+    const totalBytes = (info as any).size as number;
+    if (!totalBytes)
+      throw new Error("No se pudo determinar el tamaño del video.");
+
+    const totalChunks = Math.ceil(totalBytes / CHUNK_SIZE_BYTES);
+
+    // 3. Registrar metadatos en el servidor
+    const authHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      "ngrok-skip-browser-warning": "true",
+    };
+
+    const initRes = await fetch(
+      `${apiUrl}/procesamientos/${procesamientoId}/video/iniciar-chunks`,
+      {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({ extension, total_chunks: totalChunks }),
+      },
+    );
+    if (!initRes.ok) {
+      const errBody = await initRes.json().catch(() => ({}));
+      throw new Error(
+        errBody?.detail ?? `Error al iniciar subida (${initRes.status})`,
+      );
+    }
+
+    if (cancelado) throw new Error("Subida cancelada.");
+
+    // 4. Consultar desde qué chunk reanudar
+    let desdeChunk = 0;
+    try {
+      const estadoRes = await fetch(
+        `${apiUrl}/procesamientos/${procesamientoId}/video/estado-subida`,
+        { headers: authHeaders },
+      );
+      if (estadoRes.ok) {
+        const estado = await estadoRes.json();
+        const ultimo: number = estado.ultimo_chunk_recibido ?? -1;
+        if (ultimo >= 0 && ultimo < totalChunks - 1) {
+          desdeChunk = ultimo + 1;
+          if (onProgress)
+            onProgress(Math.round((desdeChunk / totalChunks) * 100));
+        }
+      }
+    } catch {
+      // Si falla, empezamos desde 0
+    }
+
+    // 5. Enviar chunk a chunk usando readAsStringAsync con position en bytes
+    //    Funciona correctamente en file:// (ya copiamos el archivo al cache)
+    for (let i = desdeChunk; i < totalChunks; i++) {
+      if (cancelado) throw new Error("Subida cancelada.");
+
+      const offset = i * CHUNK_SIZE_BYTES;
+      const length = Math.min(CHUNK_SIZE_BYTES, totalBytes - offset);
+
+      const b64 = await FileSystem.readAsStringAsync(uriLocal, {
+        encoding: FileSystem.EncodingType.Base64,
+        position: offset,
+        length,
+      });
+
+      // Retry con backoff exponencial
+      let intentos = 0;
+      let completo = false;
+      let enviado = false;
+      while (!enviado && intentos < MAX_REINTENTOS) {
+        if (cancelado) throw new Error("Subida cancelada.");
+        try {
+          const formBody = new FormData();
+          formBody.append("numero", String(i));
+          formBody.append("data_b64", b64);
+
+          const chunkRes = await fetch(
+            `${apiUrl}/procesamientos/${procesamientoId}/video/chunk`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "ngrok-skip-browser-warning": "true",
+              },
+              body: formBody,
+            },
+          );
+
+          if (!chunkRes.ok) {
+            const errBody = await chunkRes.json().catch(() => ({}));
+            throw new Error(
+              errBody?.detail ?? `Error en chunk ${i} (${chunkRes.status})`,
+            );
+          }
+
+          const respJson = await chunkRes.json().catch(() => ({}));
+          enviado = true;
+          // Si el servidor confirmó que recibió el último chunk y ensambló, salimos
+          if (respJson?.completo === true) completo = true;
+        } catch (err) {
+          intentos++;
+          if (intentos >= MAX_REINTENTOS) throw err;
+          await sleep(BACKOFF_BASE_MS * Math.pow(2, intentos - 1));
+        }
+      }
+
+      if (onProgress) onProgress(Math.round(((i + 1) / totalChunks) * 100));
+
+      // Si el servidor ya ensambló (último chunk confirmado), no hay más nada que enviar
+      if (completo) break;
+    }
+
+    // 6. Limpiar el archivo temporal del cache
+    try {
+      await FileSystem.deleteAsync(uriLocal, { idempotent: true });
+    } catch {
+      // ignorar, no es crítico
+    }
+  })();
 
   return { promise, cancelar };
 };

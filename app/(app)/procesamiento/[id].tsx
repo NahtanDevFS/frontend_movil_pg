@@ -50,7 +50,10 @@ const CONF_LABEL: Record<string, string> = {
 };
 
 export default function ProcesamientoScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, subidaEnCurso } = useLocalSearchParams<{
+    id: string;
+    subidaEnCurso?: string;
+  }>();
   const procId = Number(id);
   const router = useRouter();
 
@@ -67,6 +70,12 @@ export default function ProcesamientoScreen() {
     disponible: boolean;
   } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Progreso de subida (viene de nuevo.tsx vía subidaEnCurso param)
+  const [progresoSubida, setProgresoSubida] = useState<number | null>(
+    subidaEnCurso === "1" ? 0 : null,
+  );
+  const subidaResueltaRef = useRef(false);
 
   const [conteoAjustado, setConteoAjustado] = useState("");
   const [obsAjuste, setObsAjuste] = useState("");
@@ -95,12 +104,11 @@ export default function ProcesamientoScreen() {
         if (comp) setComparacion(comp);
       } else {
         setProcesando(true);
-        // Mientras procesa, trae el progreso en vivo (best-effort)
         try {
           const pr = await getProgreso(procId);
           setProgreso(pr);
         } catch {
-          // sin progreso disponible: no pasa nada, salta el spinner
+          // sin progreso disponible
         }
       }
     } catch {
@@ -109,6 +117,75 @@ export default function ProcesamientoScreen() {
       setLoading(false);
     }
   }, [procId]);
+
+  // Retomar subida si venimos de nuevo.tsx con subidaEnCurso=1
+  useEffect(() => {
+    if (subidaEnCurso !== "1" || subidaResueltaRef.current) return;
+
+    (async () => {
+      try {
+        const AsyncStorage = (
+          await import("@react-native-async-storage/async-storage")
+        ).default;
+        const raw = await AsyncStorage.getItem(`subida:${procId}`);
+        if (!raw) return; // ya se subió o se limpió
+
+        let videoUri: string;
+        let mimeType: string | undefined;
+        try {
+          const parsed = JSON.parse(raw);
+          videoUri = parsed.uri;
+          mimeType = parsed.mimeType ?? undefined;
+        } catch {
+          // compatibilidad con formato antiguo (solo string)
+          videoUri = raw;
+          mimeType = undefined;
+        }
+
+        const SecureStore = await import("expo-secure-store");
+        const { TOKEN_KEY } = await import("../../../src/api/client");
+        const { subirVideoBackground, cancelarProcesamiento } =
+          await import("../../../src/api/endpoints");
+        const token = (await SecureStore.getItemAsync(TOKEN_KEY)) ?? "";
+
+        subidaResueltaRef.current = true;
+
+        const subida = subirVideoBackground(
+          procId,
+          videoUri,
+          token,
+          (pct) => setProgresoSubida(pct),
+          mimeType,
+        );
+
+        try {
+          await subida.promise;
+          // Subida exitosa: limpiar el URI y quitar la barra
+          await AsyncStorage.removeItem(`subida:${procId}`);
+          setProgresoSubida(null);
+          // El estado del procesamiento cambiará a 'procesando'; el poll lo detectará
+        } catch (err: any) {
+          await AsyncStorage.removeItem(`subida:${procId}`);
+          setProgresoSubida(null);
+          const msg: string = err?.message ?? "No se pudo subir el video.";
+          if (msg !== "Subida cancelada.") {
+            try {
+              await cancelarProcesamiento(procId);
+            } catch {
+              /* ignorar */
+            }
+            Alert.alert(
+              "Error al subir el video",
+              msg +
+                "\n\nEl procesamiento fue cancelado. Puedes intentarlo de nuevo.",
+            );
+          }
+        }
+      } catch {
+        // Si algo falla al leer AsyncStorage, simplemente no mostramos barra
+      }
+    })();
+  }, [procId, subidaEnCurso]);
 
   useEffect(() => {
     cargar();
@@ -284,68 +361,91 @@ export default function ProcesamientoScreen() {
     const hayParcial = progreso?.disponible;
     // Se puede cancelar mientras está pendiente o procesando
     const puedeCancelar = estado === "pendiente" || estado === "procesando";
+    // La subida aún está en curso si tenemos progresoSubida
+    const subiendo = progresoSubida !== null;
 
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#2d6a4f" />
-        <Text style={styles.procesandoTitle}>Procesando video con IA</Text>
 
-        {/* Conteo parcial en vivo */}
-        {hayParcial && (
-          <View style={styles.parcialBox}>
-            <Text style={styles.parcialNum}>
-              {progreso!.conteo_parcial.toLocaleString()}
-            </Text>
-            <Text style={styles.parcialLabel}>
-              melones detectados hasta ahora
-            </Text>
-          </View>
-        )}
-
-        {/* Barra de progreso (solo si existe un porcentaje fiable) */}
-        {hayBarra && (
-          <View style={styles.barraWrap}>
-            <View style={styles.barraTrack}>
-              <View
-                style={[
-                  styles.barraFill,
-                  { width: `${progreso!.progreso_pct}%` },
-                ]}
-              />
-            </View>
-            <Text style={styles.barraPct}>{progreso!.progreso_pct}%</Text>
-          </View>
-        )}
-
-        <Text style={styles.procesandoSub}>
-          El modelo está analizando los frames. Esto puede tomar varios minutos.
-        </Text>
-        <Text style={styles.procesandoHint}>
-          Esta pantalla se actualiza automáticamente.
-        </Text>
-
-        {puedeCancelar && (
-          <TouchableOpacity
-            style={styles.btnCancelarProc}
-            onPress={handleCancelarProcesamiento}
-            disabled={cancelando}
-            activeOpacity={0.85}
-          >
-            {cancelando ? (
-              <ActivityIndicator size="small" color="#991b1b" />
-            ) : (
-              <>
-                <Ionicons
-                  name="close-circle-outline"
-                  size={16}
-                  color="#991b1b"
+        {/* Fase 1: subida del video */}
+        {subiendo ? (
+          <>
+            <Text style={styles.procesandoTitle}>Subiendo video...</Text>
+            <View style={styles.barraWrap}>
+              <View style={styles.barraTrack}>
+                <View
+                  style={[styles.barraFill, { width: `${progresoSubida}%` }]}
                 />
-                <Text style={styles.btnCancelarProcText}>
-                  Cancelar procesamiento
+              </View>
+              <Text style={styles.barraPct}>{progresoSubida}%</Text>
+            </View>
+            <Text style={styles.procesandoSub}>
+              Puedes navegar libremente. La subida continúa en segundo plano.
+            </Text>
+          </>
+        ) : (
+          <>
+            {/* Fase 2: procesamiento GPU */}
+            <Text style={styles.procesandoTitle}>Procesando video con IA</Text>
+
+            {hayParcial && (
+              <View style={styles.parcialBox}>
+                <Text style={styles.parcialNum}>
+                  {progreso!.conteo_parcial.toLocaleString()}
                 </Text>
-              </>
+                <Text style={styles.parcialLabel}>
+                  melones detectados hasta ahora
+                </Text>
+              </View>
             )}
-          </TouchableOpacity>
+
+            {hayBarra && (
+              <View style={styles.barraWrap}>
+                <View style={styles.barraTrack}>
+                  <View
+                    style={[
+                      styles.barraFill,
+                      { width: `${progreso!.progreso_pct}%` },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.barraPct}>{progreso!.progreso_pct}%</Text>
+              </View>
+            )}
+
+            <Text style={styles.procesandoSub}>
+              El modelo está analizando los frames. Esto puede tomar varios
+              minutos.
+            </Text>
+            <Text style={styles.procesandoHint}>
+              Esta pantalla se actualiza automáticamente.
+            </Text>
+
+            {puedeCancelar && (
+              <TouchableOpacity
+                style={styles.btnCancelarProc}
+                onPress={handleCancelarProcesamiento}
+                disabled={cancelando}
+                activeOpacity={0.85}
+              >
+                {cancelando ? (
+                  <ActivityIndicator size="small" color="#991b1b" />
+                ) : (
+                  <>
+                    <Ionicons
+                      name="close-circle-outline"
+                      size={16}
+                      color="#991b1b"
+                    />
+                    <Text style={styles.btnCancelarProcText}>
+                      Cancelar procesamiento
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          </>
         )}
       </View>
     );

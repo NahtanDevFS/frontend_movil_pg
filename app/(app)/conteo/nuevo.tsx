@@ -159,6 +159,7 @@ export default function NuevoConteoScreen() {
       setSubiendo(true);
       setProgresoSubida(0);
 
+      // 1. Registrar el procesamiento en BD (rápido, sin archivo)
       const proc = await registrarProcesamiento({
         conteo_id: conteoSeleccionado.id,
         surco_inicio: inicio,
@@ -167,42 +168,58 @@ export default function NuevoConteoScreen() {
       });
 
       const token = (await SecureStore.getItemAsync(TOKEN_KEY)) ?? "";
+
+      // 2. Iniciar subida en background (no awaiteamos la promise aquí)
       const subida = subirVideoBackground(
         proc.id,
         videoFile.uri,
         token,
         (pct) => setProgresoSubida(pct),
+        videoFile.mimeType ?? undefined,
       );
-      // Guardar el cancelador para el botón
       cancelarSubidaRef.fn = subida.cancelar;
 
-      try {
-        // Opción (a): esperamos a que termine la subida mostrando la barra.
-        await subida.promise;
-        // Subida completa -> ahora sí navegamos a la pantalla de procesamiento
-        setSubiendo(false);
-        cancelarSubidaRef.fn = null;
-        router.replace(`/(app)/procesamiento/${proc.id}`);
-      } catch (errSubida: any) {
-        // Falló o se canceló la subida. El procesamiento quedó registrado pero
-        // sin video; lo cancelamos para que no quede colgado y libere surcos.
-        setSubiendo(false);
-        cancelarSubidaRef.fn = null;
+      // 3. Guardar el URI del video en AsyncStorage para que procesamiento/[id]
+      //    pueda retomar la subida si la pantalla monta de nuevo
+      const AsyncStorage = (
+        await import("@react-native-async-storage/async-storage")
+      ).default;
+      await AsyncStorage.setItem(
+        `subida:${proc.id}`,
+        JSON.stringify({
+          uri: videoFile.uri,
+          mimeType: videoFile.mimeType ?? null,
+        }),
+      );
+
+      // 4. Navegar INMEDIATAMENTE a la pantalla de procesamiento.
+      //    La subida sigue corriendo en background; la pantalla de procesamiento
+      //    muestra el progreso y maneja el error si algo falla.
+      setSubiendo(false);
+      cancelarSubidaRef.fn = null;
+      router.replace({
+        pathname: "/(app)/procesamiento/[id]",
+        params: {
+          id: String(proc.id),
+          subidaEnCurso: "1",
+        },
+      });
+
+      // 5. Manejar el resultado en background (sin bloquear la navegación)
+      subida.promise.catch(async (errSubida: any) => {
+        // Si la subida falla después de navegar, cancelamos el procesamiento
         try {
           await cancelarProcesamiento(proc.id);
+          await AsyncStorage.removeItem(`subida:${proc.id}`);
         } catch {
-          // si falla la cancelación, no bloqueamos al usuario
+          // ignorar error de cancelación
         }
-        const msg: string = errSubida?.message ?? "No se pudo subir el video.";
-        if (msg !== "Subida cancelada.") {
-          Alert.alert("Error al subir", msg);
-        }
-      }
+      });
     } catch (err: any) {
       setSubiendo(false);
       Alert.alert(
         "Error",
-        err.response?.data?.detail ?? "No se pudo registrar el video.",
+        err.response?.data?.detail ?? "No se pudo registrar el procesamiento.",
       );
     }
   };
@@ -539,9 +556,7 @@ export default function NuevoConteoScreen() {
                   style={[styles.barraFill, { width: `${progresoSubida}%` }]}
                 />
               </View>
-              <Text style={styles.subidaHint}>
-                No cierres esta pantalla hasta que termine la subida.
-              </Text>
+              <Text style={styles.subidaHint}>Preparando la subida...</Text>
               <TouchableOpacity
                 style={styles.btnCancelarSubida}
                 onPress={handleCancelarSubida}
