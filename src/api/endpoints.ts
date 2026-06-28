@@ -214,7 +214,7 @@ export const subirVideoBackground = (
     if (cancelado) throw new Error("Subida cancelada.");
 
     // 2. Obtener tamaño real del archivo copiado (file:// garantiza .size correcto)
-    const info = await FileSystem.getInfoAsync(uriLocal, { size: true });
+    const info = await FileSystem.getInfoAsync(uriLocal);
     if (!info.exists) throw new Error("No se pudo copiar el archivo al cache.");
     const totalBytes = (info as any).size as number;
     if (!totalBytes)
