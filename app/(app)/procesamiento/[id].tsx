@@ -83,6 +83,7 @@ export default function ProcesamientoScreen() {
 
   const [guardandoAjuste, setGuardandoAjuste] = useState(false);
   const [descargando, setDescargando] = useState(false);
+  const [progresoDescarga, setProgresoDescarga] = useState(0);
   const [cancelando, setCancelando] = useState(false);
   const [anulando, setAnulando] = useState(false);
   const [generandoPdf, setGenerandoPdf] = useState(false);
@@ -267,20 +268,36 @@ export default function ProcesamientoScreen() {
     if (!proc?.video_anotado_url)
       return Alert.alert("Sin video", "El video anotado no está disponible.");
     setDescargando(true);
+    setProgresoDescarga(0);
     try {
       const token = await SecureStore.getItemAsync(TOKEN_KEY);
       const destino =
         FileSystem.documentDirectory + `conteo_video_${procId}.mp4`;
-      const { uri } = await FileSystem.downloadAsync(
+
+      const downloadResumable = FileSystem.createDownloadResumable(
         `${API_URL}/procesamientos/${procId}/video-anotado`,
         destino,
         { headers: { Authorization: `Bearer ${token}` } },
+        (downloadProgress) => {
+          const { totalBytesWritten, totalBytesExpectedToWrite } =
+            downloadProgress;
+          if (totalBytesExpectedToWrite > 0) {
+            const porcentaje = Math.round(
+              (totalBytesWritten / totalBytesExpectedToWrite) * 100,
+            );
+            setProgresoDescarga(porcentaje);
+          }
+        },
       );
-      await Sharing.shareAsync(uri);
+
+      const result = await downloadResumable.downloadAsync();
+      if (!result?.uri) throw new Error("No se pudo descargar el video.");
+      await Sharing.shareAsync(result.uri);
     } catch {
       Alert.alert("Error", "No se pudo descargar el video.");
     } finally {
       setDescargando(false);
+      setProgresoDescarga(0);
     }
   };
 
@@ -591,7 +608,6 @@ export default function ProcesamientoScreen() {
       </View>
 
       {/* Acciones */}
-      {/* Acciones */}
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>Acciones</Text>
         <TouchableOpacity
@@ -601,7 +617,9 @@ export default function ProcesamientoScreen() {
         >
           <Ionicons name="videocam-outline" size={18} color="#1a2e25" />
           <Text style={styles.btnActionText}>
-            {descargando ? "Descargando..." : "Descargar video etiquetado"}
+            {descargando
+              ? `Descargando... ${progresoDescarga}%`
+              : "Descargar video etiquetado"}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
