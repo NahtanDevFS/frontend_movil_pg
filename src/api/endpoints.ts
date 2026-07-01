@@ -11,6 +11,7 @@ import {
 import * as FileSystem from "expo-file-system/legacy";
 import Constants from "expo-constants";
 import { TOKEN_KEY } from "./client";
+import { registrarSubidaActiva } from "./uploadRegistry";
 
 //Auth
 export const login = async (nombre: string, password: string) => {
@@ -185,6 +186,15 @@ export const subirVideoBackground = (
     cancelado = true;
   };
 
+  // emitirProgreso se conecta al registro global una vez que la promise
+  // exista (ver más abajo); mientras tanto guardamos los valores para no
+  // perder actualizaciones tempranas.
+  let emitirAlRegistro: ((pct: number) => void) | null = null;
+  const reportarProgreso = (pct: number) => {
+    if (onProgress) onProgress(pct);
+    if (emitirAlRegistro) emitirAlRegistro(pct);
+  };
+
   const promise = (async () => {
     // 1. Copiar al cacheDirectory para garantizar acceso con file:// en ambas plataformas.
     //    DocumentPicker en Android devuelve content:// que readAsStringAsync no soporta.
@@ -258,8 +268,8 @@ export const subirVideoBackground = (
         const ultimo: number = estado.ultimo_chunk_recibido ?? -1;
         if (ultimo >= 0 && ultimo < totalChunks - 1) {
           desdeChunk = ultimo + 1;
-          if (onProgress)
-            onProgress(Math.round((desdeChunk / totalChunks) * 100));
+          if (onProgress || emitirAlRegistro)
+            reportarProgreso(Math.round((desdeChunk / totalChunks) * 100));
         }
       }
     } catch {
@@ -321,7 +331,7 @@ export const subirVideoBackground = (
         }
       }
 
-      if (onProgress) onProgress(Math.round(((i + 1) / totalChunks) * 100));
+      reportarProgreso(Math.round(((i + 1) / totalChunks) * 100));
 
       // Si el servidor ya ensambló (último chunk confirmado), no hay más nada que enviar
       if (completo) break;
@@ -334,6 +344,11 @@ export const subirVideoBackground = (
       // ignorar, no es crítico
     }
   })();
+
+  // Registrar esta subida en memoria para que cualquier pantalla que se
+  // monte después (sin haberla iniciado ella misma) pueda engancharse a su
+  // progreso en lugar de disparar una subida duplicada.
+  emitirAlRegistro = registrarSubidaActiva(procesamientoId, promise, cancelar);
 
   return { promise, cancelar };
 };

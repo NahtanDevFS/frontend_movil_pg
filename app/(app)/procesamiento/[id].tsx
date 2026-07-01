@@ -25,6 +25,7 @@ import {
   anularProcesamientoCompletado,
 } from "../../../src/api/endpoints";
 import { TOKEN_KEY } from "../../../src/api/client";
+import { suscribirseASubidaActiva } from "../../../src/api/uploadRegistry";
 import {
   ProcesamientoVideo,
   Conteo,
@@ -50,7 +51,11 @@ const CONF_LABEL: Record<string, string> = {
 };
 
 export default function ProcesamientoScreen() {
-  const { id, subidaEnCurso } = useLocalSearchParams<{
+  // subidaEnCurso ya no gobierna si se muestra/retoma la barra de subida
+  // (ver useEffect más abajo): ahora se detecta siempre revisando el
+  // registro de subidas activas en memoria y, en su defecto, AsyncStorage.
+  // Se mantiene el param solo por compatibilidad con la navegación existente.
+  const { id } = useLocalSearchParams<{
     id: string;
     subidaEnCurso?: string;
   }>();
@@ -71,10 +76,13 @@ export default function ProcesamientoScreen() {
   } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Progreso de subida (viene de nuevo.tsx vía subidaEnCurso param)
-  const [progresoSubida, setProgresoSubida] = useState<number | null>(
-    subidaEnCurso === "1" ? 0 : null,
-  );
+  // Progreso de subida. Empieza en null: se resuelve al montar comprobando
+  // primero si hay una subida activa en memoria (misma sesión de la app) y,
+  // si no, si AsyncStorage indica que quedó una subida pendiente por retomar
+  // (p. ej. la app se cerró y volvió a abrir). No depende del query param
+  // subidaEnCurso, así que funciona igual si entras por primera vez o si
+  // sales y vuelves a entrar a esta pantalla más tarde.
+  const [progresoSubida, setProgresoSubida] = useState<number | null>(null);
   const subidaResueltaRef = useRef(false);
 
   const [conteoAjustado, setConteoAjustado] = useState("");
@@ -119,17 +127,60 @@ export default function ProcesamientoScreen() {
     }
   }, [procId]);
 
-  // Retomar subida si venimos de nuevo.tsx con subidaEnCurso=1
+  // Mostrar y/o retomar la subida del video, sin importar cómo llegamos a
+  // esta pantalla (navegación inicial con subidaEnCurso=1, o volviendo a
+  // entrar más tarde desde una lista, back, etc.)
   useEffect(() => {
-    if (subidaEnCurso !== "1" || subidaResueltaRef.current) return;
+    if (subidaResueltaRef.current) return;
 
+    // 1. ¿Hay una subida ya corriendo en memoria (esta misma sesión de la
+    //    app) para este procesamiento? Si sí, solo nos suscribimos a su
+    //    progreso: NO lanzamos una subida nueva ni duplicada.
+    const suscripcion = suscribirseASubidaActiva(procId, (pct) => {
+      setProgresoSubida(pct);
+    });
+
+    if (suscripcion) {
+      subidaResueltaRef.current = true;
+      setProgresoSubida(0); // valor inicial mientras llega la primera actualización
+
+      const AsyncStoragePromise =
+        import("@react-native-async-storage/async-storage");
+
+      suscripcion.promise
+        .then(async () => {
+          setProgresoSubida(null);
+          const AsyncStorage = (await AsyncStoragePromise).default;
+          await AsyncStorage.removeItem(`subida:${procId}`).catch(() => {});
+        })
+        .catch(async () => {
+          setProgresoSubida(null);
+          const AsyncStorage = (await AsyncStoragePromise).default;
+          await AsyncStorage.removeItem(`subida:${procId}`).catch(() => {});
+          // El error ya se maneja/alerta en quien inició la subida original
+          // (nuevo.tsx o esta misma pantalla en una montura anterior), así
+          // que aquí solo limpiamos el estado visual para no duplicar alertas.
+        })
+        .finally(() => {
+          suscripcion.desuscribir();
+        });
+
+      return () => {
+        suscripcion.desuscribir();
+      };
+    }
+
+    // 2. No hay ninguna subida en memoria. ¿Quedó pendiente en AsyncStorage?
+    //    Esto cubre el caso de que la app se haya cerrado/reabierto, o que
+    //    la promise original ya haya terminado pero no se haya limpiado la
+    //    clave por algún error inesperado.
     (async () => {
       try {
         const AsyncStorage = (
           await import("@react-native-async-storage/async-storage")
         ).default;
         const raw = await AsyncStorage.getItem(`subida:${procId}`);
-        if (!raw) return; // ya se subió o se limpió
+        if (!raw) return; // no hay nada pendiente, no mostramos barra
 
         let videoUri: string;
         let mimeType: string | undefined;
@@ -150,6 +201,7 @@ export default function ProcesamientoScreen() {
         const token = (await SecureStore.getItemAsync(TOKEN_KEY)) ?? "";
 
         subidaResueltaRef.current = true;
+        setProgresoSubida(0);
 
         const subida = subirVideoBackground(
           procId,
@@ -186,7 +238,7 @@ export default function ProcesamientoScreen() {
         // Si algo falla al leer AsyncStorage, simplemente no mostramos barra
       }
     })();
-  }, [procId, subidaEnCurso]);
+  }, [procId]);
 
   useEffect(() => {
     cargar();
@@ -607,6 +659,7 @@ export default function ProcesamientoScreen() {
         />
       </View>
 
+      {/* Acciones */}
       {/* Acciones */}
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>Acciones</Text>
