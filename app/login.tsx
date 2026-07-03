@@ -31,10 +31,16 @@ export default function LoginScreen() {
     try {
       await signIn(nombre.trim(), password);
     } catch (error: any) {
-      const msg =
-        error.response?.status === 401
-          ? "Usuario o contraseña incorrectos."
-          : (error.message ?? "Error al iniciar sesión. Verifica tu conexión.");
+      let msg: string;
+      if (error.response?.status === 401) {
+        msg = "Usuario o contraseña incorrectos.";
+      } else if (error.response?.status === 429) {
+        msg =
+          error.response?.data?.detail ??
+          "Demasiados intentos fallidos. Intenta de nuevo en unos segundos.";
+      } else {
+        msg = error.message ?? "Error al iniciar sesión. Verifica tu conexión.";
+      }
       Alert.alert("Error", msg);
     } finally {
       setLoading(false);
