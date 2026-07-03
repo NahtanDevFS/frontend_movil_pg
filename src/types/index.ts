@@ -22,6 +22,7 @@ export interface Usuario {
   id: number;
   nombre: string;
   rol_id: number;
+  rol_nombre?: string;
   activo: boolean;
   created_at: string;
 }
@@ -63,10 +64,11 @@ export interface Conteo {
   variedad_id: number;
   variedad_nombre: string | null;
   estado_id: number;
+
+  estado_nombre: string | null;
   fecha_conteo: string;
   total_surcos: number;
   conteo_total_acumulado: number;
-  // nivel derivado por el backend a partir de las métricas agregadas de la sesión
   nivel_confiabilidad: "alto" | "moderado" | "bajo" | null;
   promedio_confianza_sesion: number | null;
   porcentaje_baja_confianza_sesion: number | null;

@@ -82,7 +82,9 @@ export default function NuevoConteoScreen() {
         ]);
         setVariedades(vars);
         if (vars.length > 0) setVariedadId(vars[0].id);
-        const abiertos = conteos.filter((c) => c.estado_id !== 2);
+        const abiertos = conteos.filter(
+          (c) => c.estado_nombre !== "completado",
+        );
         setConteosAbiertos(abiertos);
         if (conteo_id) {
           const existente = conteos.find((c) => c.id === Number(conteo_id));

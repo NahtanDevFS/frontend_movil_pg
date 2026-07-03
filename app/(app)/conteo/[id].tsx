@@ -449,7 +449,7 @@ export default function ConteoDetalleScreen() {
     );
   if (!conteo) return null;
 
-  const completado = conteo.estado_id === 2;
+  const completado = conteo.estado_nombre === "completado";
   const nivel = conteo.nivel_confiabilidad;
 
   return (

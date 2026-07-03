@@ -389,17 +389,26 @@ export default function CultivoDetalleScreen() {
                     styles.badge,
                     {
                       backgroundColor:
-                        item.estado_id === 2 ? "#d1fae5" : "#fff3cd",
+                        item.estado_nombre === "completado"
+                          ? "#d1fae5"
+                          : "#fff3cd",
                     },
                   ]}
                 >
                   <Text
                     style={[
                       styles.badgeText,
-                      { color: item.estado_id === 2 ? "#065f46" : "#856404" },
+                      {
+                        color:
+                          item.estado_nombre === "completado"
+                            ? "#065f46"
+                            : "#856404",
+                      },
                     ]}
                   >
-                    {item.estado_id === 2 ? "Completado" : "En progreso"}
+                    {item.estado_nombre === "completado"
+                      ? "Completado"
+                      : "En progreso"}
                   </Text>
                 </View>
               </View>
