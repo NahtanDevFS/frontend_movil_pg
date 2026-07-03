@@ -21,6 +21,9 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [intentosRestantes, setIntentosRestantes] = useState<number | null>(
+    null,
+  );
 
   const handleLogin = async () => {
     if (!nombre.trim() || !password.trim()) {
@@ -28,16 +31,26 @@ export default function LoginScreen() {
       return;
     }
     setLoading(true);
+    setIntentosRestantes(null);
     try {
       await signIn(nombre.trim(), password);
     } catch (error: any) {
+      const detail = error.response?.data?.detail;
       let msg: string;
-      if (error.response?.status === 401) {
+      if (detail?.tipo === "bloqueado") {
+        msg = detail.mensaje;
+      } else if (detail?.tipo === "credenciales_invalidas") {
+        msg = detail.mensaje;
+        if (typeof detail.intentos_restantes === "number") {
+          setIntentosRestantes(detail.intentos_restantes);
+        }
+      } else if (error.response?.status === 401) {
         msg = "Usuario o contraseña incorrectos.";
       } else if (error.response?.status === 429) {
         msg =
-          error.response?.data?.detail ??
           "Demasiados intentos fallidos. Intenta de nuevo en unos segundos.";
+      } else if (error.response) {
+        msg = "Ocurrió un error al intentar iniciar sesión.";
       } else {
         msg = error.message ?? "Error al iniciar sesión. Verifica tu conexión.";
       }
@@ -121,6 +134,13 @@ export default function LoginScreen() {
                 />
               </TouchableOpacity>
             </View>
+            {intentosRestantes !== null && intentosRestantes > 0 && (
+              <Text style={styles.intentosText}>
+                Te queda{intentosRestantes === 1 ? "" : "n"} {intentosRestantes}{" "}
+                intento{intentosRestantes === 1 ? "" : "s"} antes del bloqueo
+                temporal.
+              </Text>
+            )}
           </View>
 
           <TouchableOpacity
@@ -213,6 +233,11 @@ const styles = StyleSheet.create({
     color: "#1a2e25",
   },
   eyeBtn: { padding: 4 },
+  intentosText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: "#b06a00",
+  },
   btn: {
     backgroundColor: "#2d6a4f",
     borderRadius: 10,
