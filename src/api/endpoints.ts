@@ -181,6 +181,33 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Error de un chunk rechazado por el servidor, con su status HTTP adjunto.
+// Permite distinguir errores permanentes (4xx: el chunk nunca va a pasar,
+// reintentar es inútil) de errores transitorios (fallo de red, timeout,
+// 5xx: sí vale la pena reintentar).
+class ErrorChunk extends Error {
+  status: number | null;
+  constructor(message: string, status: number | null) {
+    super(message);
+    this.status = status;
+  }
+}
+
+// 429 (rate limit) sí se reintenta: es transitorio por definición, el
+// servidor solo pide esperar. El resto de 4xx son errores permanentes de
+// estado/permiso/formato (400, 403, 404, 422, etc.) — reintentar el mismo
+// chunk no los resuelve nunca, solo demora la falla final.
+function esReintentable(err: unknown): boolean {
+  if (err instanceof ErrorChunk) {
+    if (err.status === null) return true; // fallo de red/timeout, sin status
+    if (err.status === 429) return true;
+    return err.status >= 500; // 5xx sí, el resto de 4xx no
+  }
+  // Errores sin status conocido (fetch lanzó antes de obtener respuesta,
+  // p. ej. sin conexión): se asumen transitorios.
+  return true;
+}
+
 export interface SubidaControlada {
   promise: Promise<void>;
   cancelar: () => Promise<void>;
@@ -303,7 +330,10 @@ export const subirVideoBackground = (
         length,
       });
 
-      //Retry con backoff exponencial
+      //Retry con backoff exponencial, solo para errores transitorios
+      //(red, timeout, 5xx, 429). Un error permanente (400/403/404/422...)
+      //corta de inmediato: reintentar el mismo chunk nunca lo resuelve,
+      //solo demora la falla final hasta ~14s.
       let intentos = 0;
       let completo = false;
       let enviado = false;
@@ -328,8 +358,9 @@ export const subirVideoBackground = (
 
           if (!chunkRes.ok) {
             const errBody = await chunkRes.json().catch(() => ({}));
-            throw new Error(
+            throw new ErrorChunk(
               errBody?.detail ?? `Error en chunk ${i} (${chunkRes.status})`,
+              chunkRes.status,
             );
           }
 
@@ -338,6 +369,7 @@ export const subirVideoBackground = (
           // Si el servidor confirmó que recibió el último chunk y ensambló, salimos
           if (respJson?.completo === true) completo = true;
         } catch (err) {
+          if (!esReintentable(err)) throw err;
           intentos++;
           if (intentos >= MAX_REINTENTOS) throw err;
           await sleep(BACKOFF_BASE_MS * Math.pow(2, intentos - 1));
