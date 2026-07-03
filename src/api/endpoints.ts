@@ -12,6 +12,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import Constants from "expo-constants";
 import { TOKEN_KEY } from "./client";
 import { registrarSubidaActiva } from "./uploadRegistry";
+import { conCacheDeRespaldo } from "../offline/cacheStore";
 
 //Auth
 export const login = async (nombre: string, password: string) => {
@@ -41,22 +42,38 @@ export const cambiarPasswordPropia = async (
 };
 
 //Cultivos
+//Network-first con respaldo en cache, si no hay conexión (o el request falla por cualquier motivo), se devuelve la última copia local guardada en el dispositivo,
+//para que el operador pueda seguir navegando aunque esté sin señal. Si tampoco hay cache (primera vez que usa el dispositivo,por ejemplo), se propaga el error como siempre.
 export const getCultivos = async (): Promise<Cultivo[]> => {
-  const res = await client.get("/cultivos/");
-  return res.data;
+  const { datos } = await conCacheDeRespaldo("cultivos", async () => {
+    const res = await client.get("/cultivos/");
+    return res.data as Cultivo[];
+  });
+  return datos;
 };
 
 //Catálogos
 export const getVariedades = async (): Promise<Variedad[]> => {
-  const res = await client.get("/catalogos/variedades");
-  return res.data;
+  const { datos } = await conCacheDeRespaldo("variedades", async () => {
+    const res = await client.get("/catalogos/variedades");
+    return res.data as Variedad[];
+  });
+  return datos;
 };
 
 export const getCalibresPorVariedad = async (
   variedadId: number,
 ): Promise<Calibre[]> => {
-  const res = await client.get(`/catalogos/variedades/${variedadId}/calibres`);
-  return res.data;
+  const { datos } = await conCacheDeRespaldo(
+    `calibres:${variedadId}`,
+    async () => {
+      const res = await client.get(
+        `/catalogos/variedades/${variedadId}/calibres`,
+      );
+      return res.data as Calibre[];
+    },
+  );
+  return datos;
 };
 
 //Conteos
@@ -149,9 +166,9 @@ export const registrarProcesamiento = async (data: {
   return res.data;
 };
 
-// ─── Subida por chunks con retry automático ─────────────────────────────────
+//Subida por chunks con retry automático
 
-// Tamaño de cada chunk: 5 MB
+// Tamaño de cada chunk 5 MB
 const CHUNK_SIZE_BYTES = 5 * 1024 * 1024;
 
 // Intentos máximos por chunk antes de rendirse
@@ -186,9 +203,7 @@ export const subirVideoBackground = (
     cancelado = true;
   };
 
-  // emitirProgreso se conecta al registro global una vez que la promise
-  // exista (ver más abajo); mientras tanto guardamos los valores para no
-  // perder actualizaciones tempranas.
+  // emitirProgreso se conecta al registro global una vez que la promise exista, mientras tanto guardamos los valores para no perder actualizaciones tempranas
   let emitirAlRegistro: ((pct: number) => void) | null = null;
   const reportarProgreso = (pct: number) => {
     if (onProgress) onProgress(pct);
@@ -196,8 +211,7 @@ export const subirVideoBackground = (
   };
 
   const promise = (async () => {
-    // 1. Copiar al cacheDirectory para garantizar acceso con file:// en ambas plataformas.
-    //    DocumentPicker en Android devuelve content:// que readAsStringAsync no soporta.
+    // Copiar al cacheDirectory para garantizar acceso con file:// en ambas plataformas, DocumentPicker en Android devuelve content:// que readAsStringAsync no soporta.
     const extension = (() => {
       if (mimeType) {
         const mimeMap: Record<string, string> = {
@@ -223,7 +237,7 @@ export const subirVideoBackground = (
 
     if (cancelado) throw new Error("Subida cancelada.");
 
-    // 2. Obtener tamaño real del archivo copiado (file:// garantiza .size correcto)
+    //obtener tamaño real del archivo copiado (file:// garantiza .size correcto)
     const info = await FileSystem.getInfoAsync(uriLocal);
     if (!info.exists) throw new Error("No se pudo copiar el archivo al cache.");
     const totalBytes = (info as any).size as number;
@@ -232,7 +246,7 @@ export const subirVideoBackground = (
 
     const totalChunks = Math.ceil(totalBytes / CHUNK_SIZE_BYTES);
 
-    // 3. Registrar metadatos en el servidor
+    //Registrar metadatos en el servidor
     const authHeaders: Record<string, string> = {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
@@ -256,7 +270,7 @@ export const subirVideoBackground = (
 
     if (cancelado) throw new Error("Subida cancelada.");
 
-    // 4. Consultar desde qué chunk reanudar
+    //consultar desde qué chunk reanudar
     let desdeChunk = 0;
     try {
       const estadoRes = await fetch(
@@ -276,8 +290,7 @@ export const subirVideoBackground = (
       // Si falla, empezamos desde 0
     }
 
-    // 5. Enviar chunk a chunk usando readAsStringAsync con position en bytes
-    //    Funciona correctamente en file:// (ya copiamos el archivo al cache)
+    //Enviar chunk a chunk usando readAsStringAsync con position en bytes, funciona correctamente en file://
     for (let i = desdeChunk; i < totalChunks; i++) {
       if (cancelado) throw new Error("Subida cancelada.");
 
@@ -290,7 +303,7 @@ export const subirVideoBackground = (
         length,
       });
 
-      // Retry con backoff exponencial
+      //Retry con backoff exponencial
       let intentos = 0;
       let completo = false;
       let enviado = false;
@@ -333,11 +346,11 @@ export const subirVideoBackground = (
 
       reportarProgreso(Math.round(((i + 1) / totalChunks) * 100));
 
-      // Si el servidor ya ensambló (último chunk confirmado), no hay más nada que enviar
+      //Si el servidor ya ensambló (último chunk confirmado), no hay más nada que enviar
       if (completo) break;
     }
 
-    // 6. Limpiar el archivo temporal del cache
+    //Limpiar el archivo temporal del cache
     try {
       await FileSystem.deleteAsync(uriLocal, { idempotent: true });
     } catch {
@@ -345,9 +358,7 @@ export const subirVideoBackground = (
     }
   })();
 
-  // Registrar esta subida en memoria para que cualquier pantalla que se
-  // monte después (sin haberla iniciado ella misma) pueda engancharse a su
-  // progreso en lugar de disparar una subida duplicada.
+  //Registrar esta subida en memoria para que cualquier pantalla que se monte después (sin haberla iniciado ella misma) pueda engancharse a su progreso en lugar de disparar una subida duplicada.
   emitirAlRegistro = registrarSubidaActiva(procesamientoId, promise, cancelar);
 
   return { promise, cancelar };
@@ -359,8 +370,7 @@ export const cancelarProcesamiento = async (procesamientoId: number) => {
   return res.data;
 };
 
-// Cancela un procesamiento ya completado (mismo endpoint, ahora el backend lo permite)
-// Se exporta con nombre semántico distinto para que la UI lo diferencie claramente
+// Cancela un procesamiento ya completado (mismo endpoint, ahora el backend lo permite) se exporta con nombre semántico distinto para que la UI lo diferencie claramente
 export const anularProcesamientoCompletado = async (
   procesamientoId: number,
 ) => {
