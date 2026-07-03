@@ -102,7 +102,10 @@ export default function ProcesamientoScreen() {
       setProc(p);
       if (p.resultado) {
         setProcesando(false);
-        if (pollRef.current) clearInterval(pollRef.current);
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
         const c = await getConteo(p.conteo_id);
         setConteo(c);
         setConteoAjustado(
@@ -111,6 +114,15 @@ export default function ProcesamientoScreen() {
         setObsAjuste(p.resultado.observaciones_ajuste ?? "");
         const comp = await getComparacionAnterior(c.id).catch(() => null);
         if (comp) setComparacion(comp);
+      } else if (
+        p.estado_nombre === "cancelado" ||
+        p.estado_nombre === "error"
+      ) {
+        setProcesando(false);
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
       } else {
         setProcesando(true);
         try {
