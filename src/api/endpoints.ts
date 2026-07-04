@@ -402,13 +402,7 @@ export const cancelarProcesamiento = async (procesamientoId: number) => {
   return res.data;
 };
 
-// Cancela un procesamiento ya completado (mismo endpoint, ahora el backend lo permite) se exporta con nombre semántico distinto para que la UI lo diferencie claramente
-export const anularProcesamientoCompletado = async (
-  procesamientoId: number,
-) => {
-  const res = await client.patch(`/procesamientos/${procesamientoId}/cancelar`);
-  return res.data;
-};
+export const anularProcesamientoCompletado = cancelarProcesamiento;
 
 export const ajustarConteo = async (
   procesamientoId: number,

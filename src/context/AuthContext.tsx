@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import * as SecureStore from "expo-secure-store";
 import { router } from "expo-router";
 import { login as apiLogin, getMe } from "../api/endpoints";
-import { TOKEN_KEY } from "../api/client";
+import { TOKEN_KEY, registrarHandlerSesionExpirada } from "../api/client";
 
 interface Usuario {
   id: number;
@@ -71,6 +71,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     router.replace("/login");
   };
+
+  // Si cualquier petición recibe un 401 en medio de la sesión (token
+  // expirado o inválido), client.ts invoca este handler. Antes, client.ts
+  // solo borraba el token de SecureStore pero dejaba a la pantalla actual
+  // con el usuario "logueado" en memoria, mostrando errores genéricos en
+  // cada acción hasta que la app se reiniciara. Ahora se reutiliza la
+  // misma lógica de signOut para limpiar el estado y navegar al login.
+  useEffect(() => {
+    registrarHandlerSesionExpirada(() => {
+      setUser(null);
+      router.replace("/login");
+    });
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
