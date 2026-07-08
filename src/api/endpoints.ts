@@ -42,8 +42,7 @@ export const cambiarPasswordPropia = async (
 };
 
 //Cultivos
-//Network-first con respaldo en cache, si no hay conexión (o el request falla por cualquier motivo), se devuelve la última copia local guardada en el dispositivo,
-//para que el operador pueda seguir navegando aunque esté sin señal. Si tampoco hay cache (primera vez que usa el dispositivo,por ejemplo), se propaga el error como siempre.
+// Network-first con respaldo en cache local para poder navegar sin conexión.
 export const getCultivos = async (): Promise<Cultivo[]> => {
   const { datos } = await conCacheDeRespaldo("cultivos", async () => {
     const res = await client.get("/cultivos/");
@@ -181,10 +180,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Error de un chunk rechazado por el servidor, con su status HTTP adjunto.
-// Permite distinguir errores permanentes (4xx: el chunk nunca va a pasar,
-// reintentar es inútil) de errores transitorios (fallo de red, timeout,
-// 5xx: sí vale la pena reintentar).
+// Error de un chunk rechazado, con su status HTTP para distinguir permanente vs transitorio.
 class ErrorChunk extends Error {
   status: number | null;
   constructor(message: string, status: number | null) {
@@ -193,18 +189,14 @@ class ErrorChunk extends Error {
   }
 }
 
-// 429 (rate limit) sí se reintenta: es transitorio por definición, el
-// servidor solo pide esperar. El resto de 4xx son errores permanentes de
-// estado/permiso/formato (400, 403, 404, 422, etc.) — reintentar el mismo
-// chunk no los resuelve nunca, solo demora la falla final.
+// Reintentable: fallo de red, timeout, 429 y 5xx; el resto de 4xx son permanentes.
 function esReintentable(err: unknown): boolean {
   if (err instanceof ErrorChunk) {
     if (err.status === null) return true; // fallo de red/timeout, sin status
     if (err.status === 429) return true;
     return err.status >= 500; // 5xx sí, el resto de 4xx no
   }
-  // Errores sin status conocido (fetch lanzó antes de obtener respuesta,
-  // p. ej. sin conexión): se asumen transitorios.
+  // Errores sin status conocido (p. ej. sin conexión): se asumen transitorios.
   return true;
 }
 
@@ -230,7 +222,7 @@ export const subirVideoBackground = (
     cancelado = true;
   };
 
-  // emitirProgreso se conecta al registro global una vez que la promise exista, mientras tanto guardamos los valores para no perder actualizaciones tempranas
+  // Se conecta al registro global cuando exista la promise; entretanto guarda el valor.
   let emitirAlRegistro: ((pct: number) => void) | null = null;
   const reportarProgreso = (pct: number) => {
     if (onProgress) onProgress(pct);
@@ -238,7 +230,7 @@ export const subirVideoBackground = (
   };
 
   const promise = (async () => {
-    // Copiar al cacheDirectory para garantizar acceso con file:// en ambas plataformas, DocumentPicker en Android devuelve content:// que readAsStringAsync no soporta.
+    // Copia al cacheDirectory para tener acceso file:// (Android devuelve content:// no legible).
     const extension = (() => {
       if (mimeType) {
         const mimeMap: Record<string, string> = {
@@ -317,7 +309,7 @@ export const subirVideoBackground = (
       // Si falla, empezamos desde 0
     }
 
-    //Enviar chunk a chunk usando readAsStringAsync con position en bytes, funciona correctamente en file://
+    // Envía chunk por chunk leyendo por rango de bytes (position/length).
     for (let i = desdeChunk; i < totalChunks; i++) {
       if (cancelado) throw new Error("Subida cancelada.");
 
@@ -330,10 +322,7 @@ export const subirVideoBackground = (
         length,
       });
 
-      //Retry con backoff exponencial, solo para errores transitorios
-      //(red, timeout, 5xx, 429). Un error permanente (400/403/404/422...)
-      //corta de inmediato: reintentar el mismo chunk nunca lo resuelve,
-      //solo demora la falla final hasta ~14s.
+      // Retry con backoff exponencial solo ante errores transitorios; los permanentes cortan al instante.
       let intentos = 0;
       let completo = false;
       let enviado = false;
@@ -390,7 +379,7 @@ export const subirVideoBackground = (
     }
   })();
 
-  //Registrar esta subida en memoria para que cualquier pantalla que se monte después (sin haberla iniciado ella misma) pueda engancharse a su progreso en lugar de disparar una subida duplicada.
+  // Registra la subida en memoria para que otras pantallas se enganchen a su progreso sin duplicarla.
   emitirAlRegistro = registrarSubidaActiva(procesamientoId, promise, cancelar);
 
   return { promise, cancelar };

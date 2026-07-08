@@ -1,6 +1,4 @@
-//Banner de estado "sin conexión"
-// Componente de UI reutilizable (por ahora no está conectado a ningún layout). Muestra un aviso sutil
-// cuando no hay conexión, para que el operador sepa que puede seguir trabajando pero que ciertos datos podrían no estar actualizados.
+// Banner sutil de "sin conexión" que avisa que los datos pueden no estar actualizados.
 
 import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";

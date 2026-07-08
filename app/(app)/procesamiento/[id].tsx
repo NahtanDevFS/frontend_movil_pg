@@ -51,10 +51,7 @@ const CONF_LABEL: Record<string, string> = {
 };
 
 export default function ProcesamientoScreen() {
-  // subidaEnCurso ya no gobierna si se muestra/retoma la barra de subida
-  // (ver useEffect más abajo): ahora se detecta siempre revisando el
-  // registro de subidas activas en memoria y, en su defecto, AsyncStorage.
-  // Se mantiene el param solo por compatibilidad con la navegación existente.
+  // subidaEnCurso ya no controla la barra (se detecta por el registro en memoria / AsyncStorage); se conserva por compatibilidad.
   const { id } = useLocalSearchParams<{
     id: string;
     subidaEnCurso?: string;
@@ -76,12 +73,7 @@ export default function ProcesamientoScreen() {
   } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Progreso de subida. Empieza en null: se resuelve al montar comprobando
-  // primero si hay una subida activa en memoria (misma sesión de la app) y,
-  // si no, si AsyncStorage indica que quedó una subida pendiente por retomar
-  // (p. ej. la app se cerró y volvió a abrir). No depende del query param
-  // subidaEnCurso, así que funciona igual si entras por primera vez o si
-  // sales y vuelves a entrar a esta pantalla más tarde.
+  // Progreso de subida (null = sin subida): se resuelve al montar desde el registro en memoria o AsyncStorage.
   const [progresoSubida, setProgresoSubida] = useState<number | null>(null);
   const subidaResueltaRef = useRef(false);
 
@@ -139,15 +131,11 @@ export default function ProcesamientoScreen() {
     }
   }, [procId]);
 
-  // Mostrar y/o retomar la subida del video, sin importar cómo llegamos a
-  // esta pantalla (navegación inicial con subidaEnCurso=1, o volviendo a
-  // entrar más tarde desde una lista, back, etc.)
+  // Muestra y/o retoma la subida del video sin importar cómo se llegó a esta pantalla.
   useEffect(() => {
     if (subidaResueltaRef.current) return;
 
-    // 1. ¿Hay una subida ya corriendo en memoria (esta misma sesión de la
-    //    app) para este procesamiento? Si sí, solo nos suscribimos a su
-    //    progreso: NO lanzamos una subida nueva ni duplicada.
+    // 1. Si ya hay una subida en memoria, solo nos suscribimos a su progreso (sin duplicarla).
     const suscripcion = suscribirseASubidaActiva(procId, (pct) => {
       setProgresoSubida(pct);
     });
@@ -169,9 +157,7 @@ export default function ProcesamientoScreen() {
           setProgresoSubida(null);
           const AsyncStorage = (await AsyncStoragePromise).default;
           await AsyncStorage.removeItem(`subida:${procId}`).catch(() => {});
-          // El error ya se maneja/alerta en quien inició la subida original
-          // (nuevo.tsx o esta misma pantalla en una montura anterior), así
-          // que aquí solo limpiamos el estado visual para no duplicar alertas.
+          // El error ya lo alerta quien inició la subida; aquí solo limpiamos el estado visual.
         })
         .finally(() => {
           suscripcion.desuscribir();
@@ -182,10 +168,7 @@ export default function ProcesamientoScreen() {
       };
     }
 
-    // 2. No hay ninguna subida en memoria. ¿Quedó pendiente en AsyncStorage?
-    //    Esto cubre el caso de que la app se haya cerrado/reabierto, o que
-    //    la promise original ya haya terminado pero no se haya limpiado la
-    //    clave por algún error inesperado.
+    // 2. Sin subida en memoria: si quedó una pendiente en AsyncStorage (app cerrada/reabierta), la retomamos.
     (async () => {
       try {
         const AsyncStorage = (
@@ -302,14 +285,14 @@ export default function ProcesamientoScreen() {
           style: "destructive",
           onPress: async () => {
             setCancelando(true);
-            // Detener el polling antes de cancelar, para que ningún tick en vuelo intente releer y dispare una alerta de error.
+            // Detener el polling antes de cancelar para que ningún tick dispare una alerta de error.
             if (pollRef.current) {
               clearInterval(pollRef.current);
               pollRef.current = null;
             }
             try {
               await cancelarProcesamiento(procId);
-              // Actualizar el estado local directamente (sin recargar): refleja el cancelado al instante y evita la carrera con la lectura.
+              // Actualiza el estado local directo (sin recargar) para reflejar el cancelado al instante.
               setProc((prev) =>
                 prev ? { ...prev, estado_nombre: "cancelado" } : prev,
               );

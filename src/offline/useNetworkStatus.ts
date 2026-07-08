@@ -1,6 +1,4 @@
-//Hook de React para el estado de conexión
-// Envuelve networkStatus.ts para componentes de UI (banners, badges, etc).
-// No inicia su propia suscripción a NetInfo: reutiliza la centralizada.
+// Hook de React que expone el estado de conexión, reutilizando la suscripción central de networkStatus.
 
 import { useEffect, useState } from "react";
 import { hayConexion, suscribirseAConexion } from "./networkStatus";

@@ -181,8 +181,7 @@ export default function NuevoConteoScreen() {
       );
       cancelarSubidaRef.fn = subida.cancelar;
 
-      // 3. Guardar el URI del video en AsyncStorage para que procesamiento/[id]
-      //    pueda retomar la subida si la pantalla monta de nuevo
+      // 3. Guardar el URI en AsyncStorage para que procesamiento/[id] pueda retomar la subida.
       const AsyncStorage = (
         await import("@react-native-async-storage/async-storage")
       ).default;
@@ -194,9 +193,7 @@ export default function NuevoConteoScreen() {
         }),
       );
 
-      // 4. Navegar INMEDIATAMENTE a la pantalla de procesamiento.
-      //    La subida sigue corriendo en background; la pantalla de procesamiento
-      //    muestra el progreso y maneja el error si algo falla.
+      // 4. Navegar de inmediato a procesamiento; la subida sigue en background y se muestra allí.
       setSubiendo(false);
       cancelarSubidaRef.fn = null;
       router.replace({

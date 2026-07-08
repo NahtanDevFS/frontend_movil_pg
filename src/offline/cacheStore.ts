@@ -1,8 +1,4 @@
-//Cache genérico de solo lectura
-// Guarda la última copia conocida de cualquier dato de servidor (catálogos, listados) en AsyncStorage, junto con la fecha en que se guardó. Pensado
-// para el patrón "network-first con fallback a cache": intenta la red y, si falla, usa lo último que se guardó — sin bloquear la UI ni pedirle nada al operador.
-// No es exclusivo de catálogos: cualquier GET de la app puede usar esto,
-// pero por ahora solo lo usamos para variedades, calibres y cultivos (ver src/api/endpoints.ts).
+// Cache genérico de solo lectura en AsyncStorage para el patrón network-first con fallback a cache.
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -35,11 +31,7 @@ async function leer<T>(clave: string): Promise<EntradaCache<T> | null> {
   }
 }
 
-/*
- * Ejecuta `fetcher` (la llamada real al servidor). Si tiene éxito, guarda el resultado en cache y lo devuelve. Si falla, intenta devolver la última
-copia guardada en cache, si tampoco hay cache, relanza el error original para que la pantalla lo maneje como siempre (mostrar alerta).
-`huboError` permite a quien llama distinguir si el resultado vino de la red (fresco) o del cache (posiblemente desactualizado)
-*/
+/** Ejecuta el fetcher y cachea el resultado; si falla, devuelve la última copia de cache o relanza el error. */
 export async function conCacheDeRespaldo<T>(
   clave: string,
   fetcher: () => Promise<T>,
@@ -61,7 +53,7 @@ export async function conCacheDeRespaldo<T>(
   }
 }
 
-//lee el cache directamente, sin intentar la red. Útil para casos donde ya se sabe que no hay conexión (ver hayConexion() en networkStatus)
+// Lee el cache directamente, sin intentar la red (para cuando ya se sabe que no hay conexión).
 export async function leerCache<T>(
   clave: string,
 ): Promise<{ valor: T; guardadoEn: string } | null> {

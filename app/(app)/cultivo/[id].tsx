@@ -107,7 +107,7 @@ export default function CultivoDetalleScreen() {
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  // Maneja la selección del picker nativo (Android cierra solo; iOS se cierra al confirmar). event.type === "dismissed" = el usuario canceló.
+  // Maneja la selección del date picker nativo; event.type === "dismissed" = el usuario canceló.
   const onCambioFecha = (event: any, fecha?: Date) => {
     const cual = pickerAbierto;
     // En Android el diálogo se cierra solo; ocultamos el picker siempre.

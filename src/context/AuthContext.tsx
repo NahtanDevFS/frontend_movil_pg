@@ -72,12 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   };
 
-  // Si cualquier petición recibe un 401 en medio de la sesión (token
-  // expirado o inválido), client.ts invoca este handler. Antes, client.ts
-  // solo borraba el token de SecureStore pero dejaba a la pantalla actual
-  // con el usuario "logueado" en memoria, mostrando errores genéricos en
-  // cada acción hasta que la app se reiniciara. Ahora se reutiliza la
-  // misma lógica de signOut para limpiar el estado y navegar al login.
+  // Ante un 401 en medio de la sesión, client.ts invoca este handler para limpiar el estado e ir al login.
   useEffect(() => {
     registrarHandlerSesionExpirada(() => {
       setUser(null);

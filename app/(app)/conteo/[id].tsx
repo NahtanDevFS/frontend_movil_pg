@@ -49,7 +49,7 @@ const MAX_VIDEOS_SIN_SCROLL = 5;
 // Altura máxima del contenedor scrollable de videos (4-5 filas visibles)
 const MAX_VIDEOS_HEIGHT = 340;
 
-// Lista de videos procesados. Si supera MAX_VIDEOS_SIN_SCROLL, se muestra dentro de un contenedor con scroll interno (mismo patrón que la grilla de surcos en nuevo conteo) para no alargar indefinidamente la pantalla.
+// Lista de videos procesados; usa scroll interno si supera MAX_VIDEOS_SIN_SCROLL.
 function VideosLista({
   procs,
   onSelect,
@@ -212,8 +212,7 @@ export default function ConteoDetalleScreen() {
       return;
     }
 
-    // La segmentación por calibre NO es obligatoria: si falta, solo se advierte
-    // y el operador puede completar de todos modos.
+    // La segmentación por calibre no es obligatoria: si falta, solo se advierte.
     if (!muestreo || muestreo.clasificaciones.length === 0) {
       Alert.alert(
         "Sin segmentación por calibre",
@@ -293,8 +292,7 @@ export default function ConteoDetalleScreen() {
     if (!conteo || !cultivo) return;
     setGenerandoPdf(true);
     try {
-      // Estilos compartidos por ambas tablas (inline porque el motor de
-      // impresión no siempre respeta <style> en <head>)
+      // Estilos inline compartidos por ambas tablas (el motor de impresión no siempre respeta <style>).
       const thStyle =
         "padding:9px 8px;background:#2d6a4f;color:#fff;font-size:12px;font-weight:700;text-align:center;border:1px solid #2d6a4f";
       const tdStyle =
@@ -683,8 +681,7 @@ export default function ConteoDetalleScreen() {
                 { marginTop: 16 }, // Espacio respecto a la barra de progreso
                 (!coberturaCompleta || completando) && styles.btnDisabled,
               ]}
-              // Mantenemos el botón presionable aunque falte cobertura,
-              // para que la función handleCompletar pueda disparar la Alerta explicativa.
+              // Botón presionable aunque falte cobertura, para que handleCompletar muestre la alerta.
               disabled={completando}
               onPress={handleCompletar}
             >
