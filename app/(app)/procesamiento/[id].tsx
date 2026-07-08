@@ -518,6 +518,9 @@ export default function ProcesamientoScreen() {
   const resultado = proc.resultado;
   const efectivo = resultado.conteo_ajustado ?? resultado.conteo_ia;
   const nivel = resultado.nivel_confiabilidad;
+  const sinDetecciones =
+    resultado.conteo_ia === 0 && resultado.conteo_ajustado == null;
+  const ocultarMetricasIa = resultado.conteo_ia === 0;
 
   return (
     <ScrollView
@@ -533,22 +536,33 @@ export default function ProcesamientoScreen() {
       }
     >
       {/* Hero */}
-      <View style={styles.hero}>
-        <Text style={styles.heroLabel}>MELONES DETECTADOS</Text>
-        <Text style={styles.heroTotal}>{efectivo.toLocaleString()}</Text>
-        {resultado.conteo_ajustado != null && (
-          <Text style={styles.heroIa}>
-            Conteo IA original: {resultado.conteo_ia.toLocaleString()}
+      {sinDetecciones ? (
+        <View style={styles.heroVacio}>
+          <Ionicons name="search-outline" size={44} color="#8fa898" />
+          <Text style={styles.heroVacioTitle}>No se detectaron melones</Text>
+          <Text style={styles.heroVacioSub}>
+            La IA no encontró melones en este video. Si observaste melones en el
+            campo, puedes registrar el conteo manualmente más abajo.
           </Text>
-        )}
-        {nivel && (
-          <View style={[styles.badge, { backgroundColor: CONF_BG[nivel] }]}>
-            <Text style={[styles.badgeText, { color: CONF_COLOR[nivel] }]}>
-              {CONF_LABEL[nivel]}
+        </View>
+      ) : (
+        <View style={styles.hero}>
+          <Text style={styles.heroLabel}>MELONES DETECTADOS</Text>
+          <Text style={styles.heroTotal}>{efectivo.toLocaleString()}</Text>
+          {resultado.conteo_ajustado != null && (
+            <Text style={styles.heroIa}>
+              Conteo IA original: {resultado.conteo_ia.toLocaleString()}
             </Text>
-          </View>
-        )}
-      </View>
+          )}
+          {nivel && !ocultarMetricasIa && (
+            <View style={[styles.badge, { backgroundColor: CONF_BG[nivel] }]}>
+              <Text style={[styles.badgeText, { color: CONF_COLOR[nivel] }]}>
+                {CONF_LABEL[nivel]}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
 
       {/* Métricas */}
       <View style={styles.metricsRow}>
@@ -558,7 +572,7 @@ export default function ProcesamientoScreen() {
             {proc.surco_inicio}–{proc.surco_fin}
           </Text>
         </View>
-        {resultado.promedio_confianza && (
+        {!ocultarMetricasIa && resultado.promedio_confianza && (
           <View style={styles.metricItem}>
             <Text style={styles.metricLabel}>Confianza</Text>
             <Text style={styles.metricValue}>
@@ -566,7 +580,7 @@ export default function ProcesamientoScreen() {
             </Text>
           </View>
         )}
-        {resultado.total_frames_procesados && (
+        {!ocultarMetricasIa && resultado.total_frames_procesados && (
           <View style={styles.metricItem}>
             <Text style={styles.metricLabel}>Frames</Text>
             <Text style={styles.metricValue}>
@@ -747,6 +761,25 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
     marginTop: 2,
+  },
+  heroVacio: {
+    backgroundColor: "#eef3ef",
+    borderRadius: 16,
+    padding: 24,
+    alignItems: "center",
+    gap: 8,
+  },
+  heroVacioTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1a2e25",
+    textAlign: "center",
+  },
+  heroVacioSub: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#4a5f52",
+    textAlign: "center",
   },
   badgeText: { fontSize: 12, fontWeight: "700" },
   metricsRow: {

@@ -77,25 +77,29 @@ function VideosLista({
         )}
       </View>
       <View style={styles.procRight}>
-        {p.resultado?.nivel_confiabilidad && (
-          <View
-            style={[
-              styles.badge,
-              { backgroundColor: CONF_BG[p.resultado.nivel_confiabilidad] },
-            ]}
-          >
-            <Text
+        {p.resultado?.nivel_confiabilidad &&
+          p.resultado.conteo_ia !== 0 &&
+          !(
+            p.resultado.conteo_ia === 0 && p.resultado.conteo_ajustado == null
+          ) && (
+            <View
               style={[
-                styles.badgeText,
-                { color: CONF_COLOR[p.resultado.nivel_confiabilidad] },
+                styles.badge,
+                { backgroundColor: CONF_BG[p.resultado.nivel_confiabilidad] },
               ]}
             >
-              IA:{" "}
-              {p.resultado.nivel_confiabilidad.charAt(0).toUpperCase() +
-                p.resultado.nivel_confiabilidad.slice(1)}
-            </Text>
-          </View>
-        )}
+              <Text
+                style={[
+                  styles.badgeText,
+                  { color: CONF_COLOR[p.resultado.nivel_confiabilidad] },
+                ]}
+              >
+                IA:{" "}
+                {p.resultado.nivel_confiabilidad.charAt(0).toUpperCase() +
+                  p.resultado.nivel_confiabilidad.slice(1)}
+              </Text>
+            </View>
+          )}
         <Ionicons name="chevron-forward" size={16} color="#b7c9bf" />
       </View>
     </TouchableOpacity>
@@ -449,6 +453,7 @@ export default function ConteoDetalleScreen() {
 
   const completado = conteo.estado_nombre === "completado";
   const nivel = conteo.nivel_confiabilidad;
+  const conteoVacio = conteo.conteo_total_acumulado === 0;
 
   return (
     <ScrollView
@@ -491,7 +496,7 @@ export default function ConteoDetalleScreen() {
               {completado ? "Completado" : "En progreso"}
             </Text>
           </View>
-          {nivel && (
+          {nivel && !conteoVacio && (
             <View
               style={[
                 styles.badge,
@@ -507,7 +512,7 @@ export default function ConteoDetalleScreen() {
       </View>
 
       {/* Descripción del nivel de confianza (fila completa, legible) */}
-      {nivel && (
+      {nivel && !conteoVacio && (
         <View style={styles.confianzaCard}>
           <Text style={styles.confianzaTitulo}>
             Nivel de confianza:{" "}
