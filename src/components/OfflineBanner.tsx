@@ -1,4 +1,4 @@
-// Banner sutil de "sin conexión" que avisa que los datos pueden no estar actualizados.
+// banner sutil de "sin conexion" pa avisarle al operador que los datos pueden estar viejitos
 
 import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";

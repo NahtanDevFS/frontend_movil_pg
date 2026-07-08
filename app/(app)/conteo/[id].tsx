@@ -44,12 +44,12 @@ const CONF_COLOR: Record<string, string> = {
   moderado: "#856404",
   bajo: "#991b1b",
 };
-// A partir de cuántos videos la lista usa scroll interno (en vez de crecer)
+// a partir de cuantos videos la lista usa scroll interno en vez de crecer y crecer
 const MAX_VIDEOS_SIN_SCROLL = 5;
-// Altura máxima del contenedor scrollable de videos (4-5 filas visibles)
+// alto maximo del contenedor scrollable de videos (unas 4-5 filas)
 const MAX_VIDEOS_HEIGHT = 340;
 
-// Lista de videos procesados; usa scroll interno si supera MAX_VIDEOS_SIN_SCROLL.
+// lista de videos procesados, usa scroll interno si pasa de MAX_VIDEOS_SIN_SCROLL
 function VideosLista({
   procs,
   onSelect,
@@ -184,11 +184,11 @@ export default function ConteoDetalleScreen() {
     setRefreshing(false);
   }, [cargar]);
 
-  //logica de cobertura
+  // logica de cobertura de surcos
   const surcosCubiertos = useMemo(() => {
     const setSurcos = new Set<number>();
     procs.forEach((p) => {
-      // Solo sumamos los surcos de videos que terminaron con éxito
+      // solo sumamos los surcos de los videos que terminaron bien
       if (p.resultado) {
         for (let i = p.surco_inicio; i <= p.surco_fin; i++) {
           setSurcos.add(i);
@@ -203,7 +203,7 @@ export default function ConteoDetalleScreen() {
     : false;
 
   const handleCompletar = () => {
-    // Validar cobertura primero
+    // primero validamos la cobertura
     if (!coberturaCompleta) {
       Alert.alert(
         "Cobertura incompleta",
@@ -212,7 +212,7 @@ export default function ConteoDetalleScreen() {
       return;
     }
 
-    // La segmentación por calibre no es obligatoria: si falta, solo se advierte.
+    // la segmentacion por calibre no es obligatoria, si falta solo avisamos y se puede completar igual
     if (!muestreo || muestreo.clasificaciones.length === 0) {
       Alert.alert(
         "Sin segmentación por calibre",
@@ -292,14 +292,14 @@ export default function ConteoDetalleScreen() {
     if (!conteo || !cultivo) return;
     setGenerandoPdf(true);
     try {
-      // Estilos inline compartidos por ambas tablas (el motor de impresión no siempre respeta <style>).
+      // estilos inline compartidos por las dos tablas, el motor de impresion a veces ignora el <style> del head
       const thStyle =
         "padding:9px 8px;background:#2d6a4f;color:#fff;font-size:12px;font-weight:700;text-align:center;border:1px solid #2d6a4f";
       const tdStyle =
         "padding:8px;font-size:13px;text-align:center;border:1px solid #dde8e2;color:#1a2e25";
       const tdStrong =
         "padding:8px;font-size:13px;text-align:center;border:1px solid #dde8e2;color:#2d6a4f;font-weight:700";
-      // Evita que una fila se parta entre dos páginas
+      // evita que una fila se parta entre dos paginas
       const trKeep = "page-break-inside:avoid";
 
       const videosHtml = procs
@@ -315,7 +315,7 @@ export default function ConteoDetalleScreen() {
         )
         .join("");
 
-      // Bloque de confianza (si hay datos)
+      // bloque de confianza (si hay datos)
       const nivel = conteo.nivel_confiabilidad;
       const confColor =
         nivel === "alto"
@@ -349,7 +349,7 @@ export default function ConteoDetalleScreen() {
         </div>`
         : "";
 
-      // Bloque de comparación con ciclo anterior (si hay historial)
+      // bloque de comparacion con el ciclo anterior (si hay historial)
       const comparacionHtml =
         comparacion?.hay_historial && comparacion.conteo_anterior_total != null
           ? `
@@ -681,7 +681,7 @@ export default function ConteoDetalleScreen() {
                 { marginTop: 16 }, // Espacio respecto a la barra de progreso
                 (!coberturaCompleta || completando) && styles.btnDisabled,
               ]}
-              // Botón presionable aunque falte cobertura, para que handleCompletar muestre la alerta.
+              // dejamos el boton apretable aunque falte cobertura, pa que handleCompletar muestre la alerta que explica
               disabled={completando}
               onPress={handleCompletar}
             >

@@ -1,17 +1,17 @@
-// Estado de red centralizado: una sola suscripción a NetInfo, con lectura síncrona y suscripción a cambios.
+// estado de red central: una sola suscripcion a NetInfo, con lectura sincrona y aviso de cambios
 
 import NetInfo, { NetInfoState } from "@react-native-community/netinfo";
 
 type Listener = (conectado: boolean) => void;
 
-// Asumimos conexión al inicio para no bloquear la primera pantalla antes del primer dato de NetInfo.
+// arrancamos asumiendo que hay conexion pa no trabar la primera pantalla antes de que NetInfo diga la verdad
 let conectadoActual = true;
 let inicializado = false;
 
 const listeners = new Set<Listener>();
 
 function derivarConectado(state: NetInfoState): boolean {
-  // Usa isInternetReachable si NetInfo lo determinó; si es null, cae a isConnected.
+  // si NetInfo ya sabe si hay internet de verdad usamos eso, si viene null nos quedamos con isConnected
   if (state.isInternetReachable === null) {
     return Boolean(state.isConnected);
   }
@@ -31,19 +31,19 @@ function iniciar() {
     }
   });
 
-  // Primera lectura inmediata para no depender del primer evento del listener.
+  // una primera lectura de una pa no esperar al primer evento del listener
   NetInfo.fetch().then((state) => {
     conectadoActual = derivarConectado(state);
   });
 }
 
-/** Estado de conexión actual, de forma síncrona (mejor esfuerzo). */
+// dice si hay conexion ahorita mismo, sincrono (mejor esfuerzo)
 export function hayConexion(): boolean {
   iniciar();
   return conectadoActual;
 }
 
-/** Se suscribe a cambios de conectividad (solo al cambiar); devuelve la función para desuscribirse. */
+// se suscribe a los cambios de conexion (solo cuando cambia), devuelve la funcion pa desuscribirse
 export function suscribirseAConexion(listener: Listener): () => void {
   iniciar();
   listeners.add(listener);
@@ -52,7 +52,7 @@ export function suscribirseAConexion(listener: Listener): () => void {
   };
 }
 
-/** Se suscribe solo a la transición sin-red → con-red (para disparar sincronización automática). */
+// se suscribe solo al momento en que vuelve la conexion (pasar de sin-red a con-red), util pa sincronizar solo
 export function alRecuperarConexion(callback: () => void): () => void {
   return suscribirseAConexion((conectado) => {
     if (conectado) callback();

@@ -1,4 +1,4 @@
-// Cache genérico de solo lectura en AsyncStorage para el patrón network-first con fallback a cache.
+// cache generico de solo lectura en AsyncStorage pal patron network-first con respaldo a lo ultimo guardado
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -17,7 +17,7 @@ async function guardar<T>(clave: string, valor: T): Promise<void> {
     };
     await AsyncStorage.setItem(PREFIJO + clave, JSON.stringify(entrada));
   } catch {
-    //El cache es una mejora de experiencia, no algo crítico
+    // el cache es solo pa mejorar la experiencia, si falla no pasa nada
   }
 }
 
@@ -31,7 +31,7 @@ async function leer<T>(clave: string): Promise<EntradaCache<T> | null> {
   }
 }
 
-/** Ejecuta el fetcher y cachea el resultado; si falla, devuelve la última copia de cache o relanza el error. */
+// corre el fetcher y cachea lo que devuelve; si truena, devuelve la ultima copia guardada, y si tampoco hay relanza el error
 export async function conCacheDeRespaldo<T>(
   clave: string,
   fetcher: () => Promise<T>,
@@ -53,7 +53,7 @@ export async function conCacheDeRespaldo<T>(
   }
 }
 
-// Lee el cache directamente, sin intentar la red (para cuando ya se sabe que no hay conexión).
+// lee el cache directo sin intentar la red, pa cuando ya sabemos que no hay conexion
 export async function leerCache<T>(
   clave: string,
 ): Promise<{ valor: T; guardadoEn: string } | null> {

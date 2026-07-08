@@ -1,4 +1,4 @@
-//Catálogos
+// catalogos
 export interface Rol {
   id: number;
   nombre: string;
@@ -17,7 +17,7 @@ export interface Calibre {
   orden: number;
 }
 
-//Usuarios
+// usuarios
 export interface Usuario {
   id: number;
   nombre: string;
@@ -27,17 +27,17 @@ export interface Usuario {
   created_at: string;
 }
 
-//Cultivos
+// cultivos
 export interface Cultivo {
   id: number;
   usuario_id: number;
   nombre: string;
   municipio_id: number;
-  // nombres desnormalizados que el backend ya resuelve
+  // nombres desnormalizados que ya nos manda resueltos el backend
   municipio_nombre: string;
   departamento_id: number;
   departamento_nombre: string;
-  // ubicacion: dirección/referencia libre dentro del municipio (opcional)
+  // ubicacion: direccion o referencia libre dentro del municipio (opcional)
   ubicacion: string | null;
   hectareas: number | null;
   total_surcos: number;
@@ -45,7 +45,7 @@ export interface Cultivo {
   created_at: string;
 }
 
-// Catálogos geográficos
+// catalogos geograficos
 export interface Departamento {
   id: number;
   nombre: string;
@@ -57,7 +57,7 @@ export interface Municipio {
   departamento_id: number;
 }
 
-//Conteos
+// conteos
 export interface Conteo {
   id: number;
   campo_cultivo_id: number;
@@ -77,7 +77,7 @@ export interface Conteo {
   created_at: string;
 }
 
-//Procesamientos
+// procesamientos
 export interface ResultadoIa {
   id: number;
   conteo_ia: number;
@@ -86,7 +86,7 @@ export interface ResultadoIa {
   tiempo_procesamiento_seg: number | null;
   promedio_confianza: number | null;
   porcentaje_baja_confianza: number | null;
-  // nivel derivado por el backend a partir de las métricas de este video
+  // nivel que deriva el backend a partir de las metricas de este video
   nivel_confiabilidad: "alto" | "moderado" | "bajo" | null;
   total_frames_procesados: number | null;
 }
@@ -96,7 +96,7 @@ export interface ProcesamientoVideo {
   conteo_id: number;
   usuario_id: number;
   estado_id: number;
-  // nombre legible del estado: 'pendiente' | 'procesando' | 'completado' | 'error' | 'cancelado'
+  // nombre legible del estado: pendiente | procesando | completado | error | cancelado
   estado_nombre: string | null;
   surco_inicio: number;
   surco_fin: number;
@@ -107,7 +107,7 @@ export interface ProcesamientoVideo {
   resultado: ResultadoIa | null;
 }
 
-//Muestreo / Calibres
+// muestreo / calibres
 export interface ClasificacionCalibre {
   id: number;
   calibre_id: number;
@@ -125,7 +125,7 @@ export interface MuestreoResponse {
   clasificaciones: ClasificacionCalibre[];
 }
 
-//Comparación anterior
+// comparacion con el conteo anterior
 export interface ComparacionAnterior {
   conteo_anterior_id: number | null;
   conteo_anterior_total: number | null;

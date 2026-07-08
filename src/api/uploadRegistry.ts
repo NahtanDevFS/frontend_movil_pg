@@ -1,4 +1,4 @@
-// Registro global de subidas activas: evita subidas duplicadas y deja que cualquier pantalla se enganche a su progreso.
+// registro global de las subidas activas: evita que dos pantallas suban lo mismo y deja que cualquiera se enganche al progreso
 
 type Listener = (pct: number) => void;
 
@@ -11,7 +11,7 @@ interface SubidaActiva {
 
 const subidasActivas = new Map<number, SubidaActiva>();
 
-/** Registra una subida iniciada para que otras pantallas se suscriban en vez de lanzar otra. */
+// registra una subida ya arrancada pa que otras pantallas se suscriban en vez de lanzar otra
 export function registrarSubidaActiva(
   procesamientoId: number,
   promise: Promise<void>,
@@ -25,27 +25,27 @@ export function registrarSubidaActiva(
   };
   subidasActivas.set(procesamientoId, entry);
 
-  // Limpieza automática al terminar (éxito o error)
+  // al terminar (bien o mal) se limpia solo
   promise.finally(() => {
-    // Solo limpiamos si sigue siendo la misma entrada (por si se reemplazó)
+    // solo si sigue siendo la misma entrada, por si la reemplazaron
     if (subidasActivas.get(procesamientoId) === entry) {
       subidasActivas.delete(procesamientoId);
     }
   });
 
-  // Devuelve el onProgress que alimenta este registro y propaga a los listeners.
+  // devuelve el onProgress que alimenta este registro y avisa a todos los listeners
   return (pct: number) => {
     entry.progresoActual = pct;
     entry.listeners.forEach((fn) => fn(pct));
   };
 }
 
-/** True si hay una subida en memoria activa para ese procesamiento. */
+// true si hay una subida viva en memoria pa ese procesamiento
 export function haySubidaActiva(procesamientoId: number): boolean {
   return subidasActivas.has(procesamientoId);
 }
 
-/** Suscribe un listener al progreso de una subida activa; null si no hay ninguna para ese id. */
+// suscribe un listener al progreso de una subida activa, devuelve null si no hay ninguna pa ese id
 export function suscribirseASubidaActiva(
   procesamientoId: number,
   onProgress: (pct: number) => void,
@@ -58,7 +58,7 @@ export function suscribirseASubidaActiva(
   if (!entry) return null;
 
   entry.listeners.add(onProgress);
-  // Emite el valor actual de inmediato para que la UI no arranque en 0.
+  // le pasamos el valor actual de una, pa que la UI no arranque en 0 si la subida ya llevaba avance
   onProgress(entry.progresoActual);
 
   const desuscribir = () => {

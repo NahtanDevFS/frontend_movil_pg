@@ -43,7 +43,7 @@ export default function CultivoDetalleScreen() {
   const [skip, setSkip] = useState(0);
   const LIMIT = 20;
 
-  // Filtros
+  // filtros
   const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>("todos");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
@@ -99,7 +99,7 @@ export default function CultivoDetalleScreen() {
     cargar(false);
   };
 
-  // Formatea un Date a "AAAA-MM-DD" (lo que espera el backend), en hora local
+  // convierte un Date a "AAAA-MM-DD" (lo que espera el backend) en hora local
   const formatearFecha = (d: Date) => {
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -107,10 +107,10 @@ export default function CultivoDetalleScreen() {
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  // Maneja la selección del date picker nativo; event.type === "dismissed" = el usuario canceló.
+  // maneja lo que devuelve el date picker nativo; si event.type === "dismissed" es que el usuario cancelo
   const onCambioFecha = (event: any, fecha?: Date) => {
     const cual = pickerAbierto;
-    // En Android el diálogo se cierra solo; ocultamos el picker siempre.
+    // en Android el dialogo se cierra solo, igual ocultamos el picker siempre
     if (Platform.OS === "android") setPickerAbierto(null);
 
     if (event.type === "dismissed" || !fecha) {
@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
   cultivoNombre: { fontSize: 17, fontWeight: "700", color: "#fff" },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
   metaText: { fontSize: 12, color: "rgba(255,255,255,0.75)" },
-  // Filtros
+  // filtros
   filtroBar: {
     backgroundColor: "#fff",
     paddingHorizontal: 16,
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
   fechaPlaceholder: { fontSize: 13, color: "#a0b5a8" },
   btnLimpiar: { alignSelf: "flex-end" },
   btnLimpiarText: { fontSize: 12, fontWeight: "700", color: "#dc2626" },
-  // Lista
+  // lista
   list: { padding: 16, gap: 10 },
   btnNuevo: {
     backgroundColor: "#2d6a4f",

@@ -51,7 +51,7 @@ const CONF_LABEL: Record<string, string> = {
 };
 
 export default function ProcesamientoScreen() {
-  // subidaEnCurso ya no controla la barra (se detecta por el registro en memoria / AsyncStorage); se conserva por compatibilidad.
+  // el param subidaEnCurso ya no manda, la barra se detecta sola por el registro en memoria o AsyncStorage; lo dejamos por compatibilidad
   const { id } = useLocalSearchParams<{
     id: string;
     subidaEnCurso?: string;
@@ -73,7 +73,7 @@ export default function ProcesamientoScreen() {
   } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Progreso de subida (null = sin subida): se resuelve al montar desde el registro en memoria o AsyncStorage.
+  // progreso de la subida (null = no hay subida), se resuelve al montar mirando el registro en memoria o AsyncStorage
   const [progresoSubida, setProgresoSubida] = useState<number | null>(null);
   const subidaResueltaRef = useRef(false);
 
@@ -121,7 +121,7 @@ export default function ProcesamientoScreen() {
           const pr = await getProgreso(procId);
           setProgreso(pr);
         } catch {
-          // sin progreso disponible
+          // todavia no hay progreso
         }
       }
     } catch {
@@ -131,11 +131,11 @@ export default function ProcesamientoScreen() {
     }
   }, [procId]);
 
-  // Muestra y/o retoma la subida del video sin importar cómo se llegó a esta pantalla.
+  // muestra y/o retoma la subida del video sin importar como llegamos a esta pantalla
   useEffect(() => {
     if (subidaResueltaRef.current) return;
 
-    // 1. Si ya hay una subida en memoria, solo nos suscribimos a su progreso (sin duplicarla).
+    // 1. si ya hay una subida corriendo en memoria, solo nos colgamos de su progreso, no lanzamos otra
     const suscripcion = suscribirseASubidaActiva(procId, (pct) => {
       setProgresoSubida(pct);
     });
@@ -157,7 +157,7 @@ export default function ProcesamientoScreen() {
           setProgresoSubida(null);
           const AsyncStorage = (await AsyncStoragePromise).default;
           await AsyncStorage.removeItem(`subida:${procId}`).catch(() => {});
-          // El error ya lo alerta quien inició la subida; aquí solo limpiamos el estado visual.
+          // el error ya lo alerta quien arranco la subida, aca solo limpiamos lo visual pa no duplicar el aviso
         })
         .finally(() => {
           suscripcion.desuscribir();
@@ -168,7 +168,7 @@ export default function ProcesamientoScreen() {
       };
     }
 
-    // 2. Sin subida en memoria: si quedó una pendiente en AsyncStorage (app cerrada/reabierta), la retomamos.
+    // 2. si no hay en memoria pero quedo una pendiente en AsyncStorage (app cerrada y reabierta), la retomamos
     (async () => {
       try {
         const AsyncStorage = (
@@ -184,7 +184,7 @@ export default function ProcesamientoScreen() {
           videoUri = parsed.uri;
           mimeType = parsed.mimeType ?? undefined;
         } catch {
-          // compatibilidad con formato antiguo (solo string)
+          // por compatibilidad con el formato viejo (antes era solo un string)
           videoUri = raw;
           mimeType = undefined;
         }
@@ -208,10 +208,10 @@ export default function ProcesamientoScreen() {
 
         try {
           await subida.promise;
-          // Subida exitosa: limpiar el URI y quitar la barra
+          // subida ok: borramos el uri guardado y quitamos la barra
           await AsyncStorage.removeItem(`subida:${procId}`);
           setProgresoSubida(null);
-          // El estado del procesamiento cambiará a 'procesando'; el poll lo detectará
+          // el estado va a pasar a 'procesando' y el poll lo va a agarrar
         } catch (err: any) {
           await AsyncStorage.removeItem(`subida:${procId}`);
           setProgresoSubida(null);
@@ -230,7 +230,7 @@ export default function ProcesamientoScreen() {
           }
         }
       } catch {
-        // Si algo falla al leer AsyncStorage, simplemente no mostramos barra
+        // si algo falla leyendo AsyncStorage, ni modo, no mostramos barra
       }
     })();
   }, [procId]);
@@ -285,14 +285,14 @@ export default function ProcesamientoScreen() {
           style: "destructive",
           onPress: async () => {
             setCancelando(true);
-            // Detener el polling antes de cancelar para que ningún tick dispare una alerta de error.
+            // paramos el polling antes de cancelar, pa que ningun tick en vuelo dispare una alerta de error
             if (pollRef.current) {
               clearInterval(pollRef.current);
               pollRef.current = null;
             }
             try {
               await cancelarProcesamiento(procId);
-              // Actualiza el estado local directo (sin recargar) para reflejar el cancelado al instante.
+              // actualizamos el estado local directo (sin recargar) pa que se vea cancelado al toque
               setProc((prev) =>
                 prev ? { ...prev, estado_nombre: "cancelado" } : prev,
               );
@@ -364,7 +364,7 @@ export default function ProcesamientoScreen() {
               setProc((prev) =>
                 prev ? { ...prev, estado_nombre: "cancelado" } : prev,
               );
-              // Navegar atrás para refrescar la lista del conteo
+              // nos vamos pa atras pa que se refresque la lista del conteo
               router.back();
             } catch (err: any) {
               Alert.alert(
@@ -391,7 +391,7 @@ export default function ProcesamientoScreen() {
   if (procesando || !proc?.resultado) {
     const estado = proc?.estado_nombre;
 
-    // Estado terminal sin resultado: cancelado o error -> no seguir "procesando"
+    // estado terminal sin resultado (cancelado o error): ya no seguimos mostrando "procesando"
     if (estado === "cancelado" || estado === "error") {
       return (
         <View style={styles.centered}>
@@ -423,9 +423,9 @@ export default function ProcesamientoScreen() {
 
     const hayBarra = progreso?.disponible && progreso.progreso_pct > 0;
     const hayParcial = progreso?.disponible;
-    // Se puede cancelar mientras está pendiente o procesando
+    // se puede cancelar mientras esta pendiente o procesando
     const puedeCancelar = estado === "pendiente" || estado === "procesando";
-    // La subida aún está en curso si tenemos progresoSubida
+    // si hay progresoSubida es que la subida sigue en curso
     const subiendo = progresoSubida !== null;
 
     return (
@@ -654,7 +654,6 @@ export default function ProcesamientoScreen() {
         />
       </View>
 
-      {/* Acciones */}
       {/* Acciones */}
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>Acciones</Text>

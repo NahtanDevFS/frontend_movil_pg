@@ -14,7 +14,7 @@ import { TOKEN_KEY } from "./client";
 import { registrarSubidaActiva } from "./uploadRegistry";
 import { conCacheDeRespaldo } from "../offline/cacheStore";
 
-//Auth
+// auth
 export const login = async (nombre: string, password: string) => {
   const params = new URLSearchParams();
   params.append("username", nombre);
@@ -41,8 +41,8 @@ export const cambiarPasswordPropia = async (
   return res.data;
 };
 
-//Cultivos
-// Network-first con respaldo en cache local para poder navegar sin conexión.
+// cultivos
+// network-first con respaldo en cache local pa poder navegar aunque no haya señal
 export const getCultivos = async (): Promise<Cultivo[]> => {
   const { datos } = await conCacheDeRespaldo("cultivos", async () => {
     const res = await client.get("/cultivos/");
@@ -51,7 +51,7 @@ export const getCultivos = async (): Promise<Cultivo[]> => {
   return datos;
 };
 
-//Catálogos
+// catalogos
 export const getVariedades = async (): Promise<Variedad[]> => {
   const { datos } = await conCacheDeRespaldo("variedades", async () => {
     const res = await client.get("/catalogos/variedades");
@@ -75,7 +75,7 @@ export const getCalibresPorVariedad = async (
   return datos;
 };
 
-//Conteos
+// conteos
 export const getConteosPorCultivo = async (
   cultivoId: number,
   params?: {
@@ -132,7 +132,7 @@ export const guardarMuestreo = async (
   return res.data;
 };
 
-//Procesamientos
+// procesamientos
 export const getProcesamientosPorConteo = async (
   conteoId: number,
 ): Promise<ProcesamientoVideo[]> => {
@@ -147,7 +147,7 @@ export const getProcesamiento = async (
   return res.data;
 };
 
-//registra el procesamiento sin archivo, devuelve el id inmediatamente
+// registra el procesamiento sin el archivo y devuelve el id de una vez
 export const registrarProcesamiento = async (data: {
   conteo_id: number;
   surco_inicio: number;
@@ -165,22 +165,22 @@ export const registrarProcesamiento = async (data: {
   return res.data;
 };
 
-//Subida por chunks con retry automático
+// subida por chunks con reintento automatico
 
-// Tamaño de cada chunk 5 MB
+// cada chunk pesa 5 MB
 const CHUNK_SIZE_BYTES = 5 * 1024 * 1024;
 
-// Intentos máximos por chunk antes de rendirse
+// cuantas veces reintentamos un chunk antes de rendirnos
 const MAX_REINTENTOS = 3;
 
-// Backoff base en ms (se duplica por cada reintento: 2s, 4s, 8s)
+// backoff base en ms, se duplica en cada reintento (2s, 4s, 8s)
 const BACKOFF_BASE_MS = 2000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Error de un chunk rechazado, con su status HTTP para distinguir permanente vs transitorio.
+// error de un chunk rechazado, guardamos el status HTTP pa saber si es permanente o transitorio
 class ErrorChunk extends Error {
   status: number | null;
   constructor(message: string, status: number | null) {
@@ -189,14 +189,14 @@ class ErrorChunk extends Error {
   }
 }
 
-// Reintentable: fallo de red, timeout, 429 y 5xx; el resto de 4xx son permanentes.
+// reintentable: fallo de red, timeout, 429 y 5xx; el resto de 4xx son permanentes y no vale la pena reintentar
 function esReintentable(err: unknown): boolean {
   if (err instanceof ErrorChunk) {
     if (err.status === null) return true; // fallo de red/timeout, sin status
     if (err.status === 429) return true;
     return err.status >= 500; // 5xx sí, el resto de 4xx no
   }
-  // Errores sin status conocido (p. ej. sin conexión): se asumen transitorios.
+  // errores sin status (ej sin conexion) los tomamos como transitorios
   return true;
 }
 
@@ -222,7 +222,7 @@ export const subirVideoBackground = (
     cancelado = true;
   };
 
-  // Se conecta al registro global cuando exista la promise; entretanto guarda el valor.
+  // se engancha al registro global cuando ya exista la promise, mientras tanto guarda el ultimo valor
   let emitirAlRegistro: ((pct: number) => void) | null = null;
   const reportarProgreso = (pct: number) => {
     if (onProgress) onProgress(pct);
@@ -230,7 +230,7 @@ export const subirVideoBackground = (
   };
 
   const promise = (async () => {
-    // Copia al cacheDirectory para tener acceso file:// (Android devuelve content:// no legible).
+    // copiamos al cacheDirectory pa tener acceso file:// (Android devuelve content:// que readAsString no lee)
     const extension = (() => {
       if (mimeType) {
         const mimeMap: Record<string, string> = {
@@ -256,7 +256,7 @@ export const subirVideoBackground = (
 
     if (cancelado) throw new Error("Subida cancelada.");
 
-    //obtener tamaño real del archivo copiado (file:// garantiza .size correcto)
+    // sacamos el tamaño real del archivo ya copiado (con file:// el .size sale bien)
     const info = await FileSystem.getInfoAsync(uriLocal);
     if (!info.exists) throw new Error("No se pudo copiar el archivo al cache.");
     const totalBytes = (info as any).size as number;
@@ -265,7 +265,7 @@ export const subirVideoBackground = (
 
     const totalChunks = Math.ceil(totalBytes / CHUNK_SIZE_BYTES);
 
-    //Registrar metadatos en el servidor
+    // registramos la meta en el servidor antes de mandar los chunks
     const authHeaders: Record<string, string> = {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
@@ -289,7 +289,7 @@ export const subirVideoBackground = (
 
     if (cancelado) throw new Error("Subida cancelada.");
 
-    //consultar desde qué chunk reanudar
+    // preguntamos desde que chunk reanudar por si ya se habia subido algo
     let desdeChunk = 0;
     try {
       const estadoRes = await fetch(
@@ -306,10 +306,10 @@ export const subirVideoBackground = (
         }
       }
     } catch {
-      // Si falla, empezamos desde 0
+      // si falla, arrancamos desde 0
     }
 
-    // Envía chunk por chunk leyendo por rango de bytes (position/length).
+    // mandamos chunk por chunk leyendo por rango de bytes (position/length)
     for (let i = desdeChunk; i < totalChunks; i++) {
       if (cancelado) throw new Error("Subida cancelada.");
 
@@ -322,7 +322,7 @@ export const subirVideoBackground = (
         length,
       });
 
-      // Retry con backoff exponencial solo ante errores transitorios; los permanentes cortan al instante.
+      // retry con backoff solo si el error es transitorio; los permanentes cortan al toque, reintentar no sirve
       let intentos = 0;
       let completo = false;
       let enviado = false;
@@ -355,7 +355,7 @@ export const subirVideoBackground = (
 
           const respJson = await chunkRes.json().catch(() => ({}));
           enviado = true;
-          // Si el servidor confirmó que recibió el último chunk y ensambló, salimos
+          // si el server confirmo que recibio el ultimo chunk y ensamblo, salimos
           if (respJson?.completo === true) completo = true;
         } catch (err) {
           if (!esReintentable(err)) throw err;
@@ -367,25 +367,25 @@ export const subirVideoBackground = (
 
       reportarProgreso(Math.round(((i + 1) / totalChunks) * 100));
 
-      //Si el servidor ya ensambló (último chunk confirmado), no hay más nada que enviar
+      // si el server ya ensamblo, ya no hay nada mas que mandar
       if (completo) break;
     }
 
-    //Limpiar el archivo temporal del cache
+    // borramos el archivo temporal del cache
     try {
       await FileSystem.deleteAsync(uriLocal, { idempotent: true });
     } catch {
-      // ignorar, no es crítico
+      // da igual, no es critico
     }
   })();
 
-  // Registra la subida en memoria para que otras pantallas se enganchen a su progreso sin duplicarla.
+  // registramos la subida en memoria pa que otras pantallas se enganchen a su progreso sin duplicarla
   emitirAlRegistro = registrarSubidaActiva(procesamientoId, promise, cancelar);
 
   return { promise, cancelar };
 };
 
-// Cancela/anula un procesamiento (operador dueño, solo pendiente/procesando)
+// cancela/anula un procesamiento (el operador dueño, solo si esta pendiente o procesando)
 export const cancelarProcesamiento = async (procesamientoId: number) => {
   const res = await client.patch(`/procesamientos/${procesamientoId}/cancelar`);
   return res.data;

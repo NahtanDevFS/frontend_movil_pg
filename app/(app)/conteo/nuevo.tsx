@@ -66,7 +66,7 @@ export default function NuevoConteoScreen() {
   const [totalSurcos, setTotalSurcos] = useState(0);
   const [creandoNuevo, setCreandoNuevo] = useState(false);
 
-  // Estado de subida (opción a: barra visible, cancelable)
+  //estado de la subida (barra visible y que se puede cancelar)
   const [subiendo, setSubiendo] = useState(false);
   const [progresoSubida, setProgresoSubida] = useState(0);
   const cancelarSubidaRef = useState<{ fn: (() => Promise<void>) | null }>({
@@ -161,7 +161,7 @@ export default function NuevoConteoScreen() {
       setSubiendo(true);
       setProgresoSubida(0);
 
-      // 1. Registrar el procesamiento en BD (rápido, sin archivo)
+      //registramos el procesamiento en la BD (rapido, sin el archivo)
       const proc = await registrarProcesamiento({
         conteo_id: conteoSeleccionado.id,
         surco_inicio: inicio,
@@ -171,7 +171,7 @@ export default function NuevoConteoScreen() {
 
       const token = (await SecureStore.getItemAsync(TOKEN_KEY)) ?? "";
 
-      // 2. Iniciar subida en background (no awaiteamos la promise aquí)
+      //arrancamos la subida en background (no esperamos la promise aca)
       const subida = subirVideoBackground(
         proc.id,
         videoFile.uri,
@@ -181,7 +181,7 @@ export default function NuevoConteoScreen() {
       );
       cancelarSubidaRef.fn = subida.cancelar;
 
-      // 3. Guardar el URI en AsyncStorage para que procesamiento/[id] pueda retomar la subida.
+      //guardamos el uri en AsyncStorage pa que procesamiento/[id] pueda retomar la subida si hace falta
       const AsyncStorage = (
         await import("@react-native-async-storage/async-storage")
       ).default;
@@ -193,7 +193,7 @@ export default function NuevoConteoScreen() {
         }),
       );
 
-      // 4. Navegar de inmediato a procesamiento; la subida sigue en background y se muestra allí.
+      //nos vamos de una a la pantalla de procesamiento, la subida sigue atras y se ve alla
       setSubiendo(false);
       cancelarSubidaRef.fn = null;
       router.replace({
@@ -204,14 +204,14 @@ export default function NuevoConteoScreen() {
         },
       });
 
-      // 5. Manejar el resultado en background (sin bloquear la navegación)
+      //manejamos el resultado atras sin bloquear la navegacion
       subida.promise.catch(async (errSubida: any) => {
-        // Si la subida falla después de navegar, cancelamos el procesamiento
+        // si la subida falla despues de navegar, cancelamos el procesamiento pa que no quede colgado
         try {
           await cancelarProcesamiento(proc.id);
           await AsyncStorage.removeItem(`subida:${proc.id}`);
         } catch {
-          // ignorar error de cancelación
+          // da igual si falla la cancelacion
         }
       });
     } catch (err: any) {
@@ -534,9 +534,7 @@ export default function NuevoConteoScreen() {
                     color="#8fa898"
                   />
                   <Text style={styles.videoPickerText}>Seleccionar video</Text>
-                  <Text style={styles.videoPickerHint}>
-                    MP4, MOV — máx. recomendado 500 MB
-                  </Text>
+                  <Text style={styles.videoPickerHint}>MP4, MOV</Text>
                 </View>
               )}
             </TouchableOpacity>

@@ -14,6 +14,7 @@ const client = axios.create({
   },
 });
 
+// a cada request le pegamos el token del secure store si lo hay
 client.interceptors.request.use(async (config: AxiosRequestConfig) => {
   const token = await SecureStore.getItemAsync(TOKEN_KEY);
   if (token && config.headers) {
@@ -23,7 +24,7 @@ client.interceptors.request.use(async (config: AxiosRequestConfig) => {
   return config as any;
 });
 
-// Callback para notificar sesión expirada sin importar AuthContext (evita un ciclo de imports).
+// callback pa avisar que la sesion expiro sin importar AuthContext (asi evitamos un ciclo de imports)
 let onSesionExpirada: (() => void) | null = null;
 
 export function registrarHandlerSesionExpirada(handler: () => void) {
@@ -35,7 +36,7 @@ client.interceptors.response.use(
   async (error: AxiosError) => {
     if (error.response?.status === 401) {
       await SecureStore.deleteItemAsync(TOKEN_KEY);
-      // Excluye /login: ahí un 401 es "credenciales incorrectas", no sesión expirada.
+      // menos en /login, ahi un 401 es "credenciales malas", no sesion expirada
       const esLogin = error.config?.url?.includes("/login");
       if (!esLogin) {
         onSesionExpirada?.();

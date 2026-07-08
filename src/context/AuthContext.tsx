@@ -30,7 +30,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Al arrancar la app: verificar si hay token guardado
+  // al abrir la app: si hay token guardado, intentamos recuperar la sesion
   useEffect(() => {
     const restoreSession = async () => {
       try {
@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const userData = await getMe();
         setUser(userData);
       } catch {
-        // Token inválido o expirado
+        // el token estaba invalido o vencido, lo botamos
         await SecureStore.deleteItemAsync(TOKEN_KEY);
       } finally {
         setLoading(false);
@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await SecureStore.setItemAsync(TOKEN_KEY, access_token);
     const userData = await getMe();
 
-    // La app móvil es solo para operadores y adicionalmente, administradores
+    // la app movil es pa operadores y tambien admins, solo chequeamos que el usuario venga bien
     if (userData.rol_id === undefined) {
       await SecureStore.deleteItemAsync(TOKEN_KEY);
       throw new Error("No se pudo verificar el usuario.");
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   };
 
-  // Ante un 401 en medio de la sesión, client.ts invoca este handler para limpiar el estado e ir al login.
+  // si cae un 401 en medio de la sesion, client.ts llama este handler pa limpiar el estado y mandar al login
   useEffect(() => {
     registrarHandlerSesionExpirada(() => {
       setUser(null);
