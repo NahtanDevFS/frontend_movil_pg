@@ -98,6 +98,8 @@ export interface ProcesamientoVideo {
   estado_id: number;
   // nombre legible del estado: pendiente | procesando | completado | error | cancelado
   estado_nombre: string | null;
+  // estado del conteo padre: en_progreso | completado
+  conteo_estado_nombre: string | null;
   surco_inicio: number;
   surco_fin: number;
   video_original_url: string;

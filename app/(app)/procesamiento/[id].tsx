@@ -669,20 +669,30 @@ export default function ProcesamientoScreen() {
               : "Descargar video etiquetado"}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.btnAnular, anulando && styles.btnDisabled]}
-          onPress={handleAnularProcesamiento}
-          disabled={anulando}
-        >
-          {anulando ? (
-            <ActivityIndicator size="small" color="#991b1b" />
-          ) : (
-            <>
-              <Ionicons name="trash-outline" size={18} color="#991b1b" />
-              <Text style={styles.btnAnularText}>Anular procesamiento</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        {proc.conteo_estado_nombre === "completado" ? (
+          <View style={styles.avisoConteoCompletado}>
+            <Ionicons name="lock-closed-outline" size={16} color="#8fa898" />
+            <Text style={styles.avisoConteoCompletadoText}>
+              Este conteo está completado. Para modificar o anular
+              procesamientos, un administrador debe reabrirlo primero.
+            </Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[styles.btnAnular, anulando && styles.btnDisabled]}
+            onPress={handleAnularProcesamiento}
+            disabled={anulando}
+          >
+            {anulando ? (
+              <ActivityIndicator size="small" color="#991b1b" />
+            ) : (
+              <>
+                <Ionicons name="trash-outline" size={18} color="#991b1b" />
+                <Text style={styles.btnAnularText}>Anular procesamiento</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
     </ScrollView>
   );
@@ -840,6 +850,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
     borderColor: "#dde8e2",
+  },
+  avisoConteoCompletado: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#eef3ef",
+    borderRadius: 10,
+    padding: 12,
+  },
+  avisoConteoCompletadoText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#4a5f52",
   },
   btnSecondaryText: { color: "#5a7a6a", fontWeight: "600", fontSize: 14 },
   parcialBox: {
