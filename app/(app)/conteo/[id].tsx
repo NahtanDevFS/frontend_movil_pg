@@ -15,6 +15,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import * as FileSystem from "expo-file-system/legacy";
 import {
   getConteo,
   getProcesamientosPorConteo,
@@ -432,9 +433,19 @@ export default function ConteoDetalleScreen() {
           Generado por MelonCount · ${new Date().toLocaleString("es-GT")}
         </p></body></html>`;
       const { uri } = await Print.printToFileAsync({ html });
-      await Sharing.shareAsync(uri, {
+      const nombreArchivo = `conteo_${conteo.id}_reporte.pdf`;
+      const destino = `${FileSystem.cacheDirectory}${nombreArchivo}`;
+
+      const info = await FileSystem.getInfoAsync(destino);
+      if (info.exists) {
+        await FileSystem.deleteAsync(destino, { idempotent: true });
+      }
+      await FileSystem.moveAsync({ from: uri, to: destino });
+
+      await Sharing.shareAsync(destino, {
         mimeType: "application/pdf",
         UTI: ".pdf",
+        dialogTitle: nombreArchivo,
       });
     } catch {
       Alert.alert("Error", "No se pudo generar el PDF.");
