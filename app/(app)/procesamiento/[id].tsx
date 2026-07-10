@@ -51,7 +51,6 @@ const CONF_LABEL: Record<string, string> = {
 };
 
 export default function ProcesamientoScreen() {
-  // el param subidaEnCurso ya no manda, la barra se detecta sola por el registro en memoria o AsyncStorage; lo dejamos por compatibilidad
   const { id } = useLocalSearchParams<{
     id: string;
     subidaEnCurso?: string;
@@ -131,18 +130,18 @@ export default function ProcesamientoScreen() {
     }
   }, [procId]);
 
-  // muestra y/o retoma la subida del video sin importar como llegamos a esta pantalla
+  //muestra y/o retoma la subida del video sin importar como llegamos a esta pantalla
   useEffect(() => {
     if (subidaResueltaRef.current) return;
 
-    // 1. si ya hay una subida corriendo en memoria, solo nos colgamos de su progreso, no lanzamos otra
+    // si ya hay una subida corriendo en memoria, solo nos colgamos de su progreso, no lanzamos otra
     const suscripcion = suscribirseASubidaActiva(procId, (pct) => {
       setProgresoSubida(pct);
     });
 
     if (suscripcion) {
       subidaResueltaRef.current = true;
-      setProgresoSubida(0); // valor inicial mientras llega la primera actualización
+      setProgresoSubida(0); //valor inicial mientras llega la primera actualización
 
       const AsyncStoragePromise =
         import("@react-native-async-storage/async-storage");
@@ -168,7 +167,7 @@ export default function ProcesamientoScreen() {
       };
     }
 
-    // 2. si no hay en memoria pero quedo una pendiente en AsyncStorage (app cerrada y reabierta), la retomamos
+    //si no hay en memoria pero quedo una pendiente en AsyncStorage (app cerrada y reabierta), la retomamos
     (async () => {
       try {
         const AsyncStorage = (
@@ -207,7 +206,7 @@ export default function ProcesamientoScreen() {
 
         try {
           await subida.promise;
-          // subida ok: borramos el uri guardado y quitamos la barra
+          // subida ok borramos el uri guardado y quitamos la barra
           await AsyncStorage.removeItem(`subida:${procId}`);
           setProgresoSubida(null);
           // el estado va a pasar a 'procesando' y el poll lo va a agarrar
@@ -292,7 +291,7 @@ export default function ProcesamientoScreen() {
             }
             try {
               await cancelarProcesamiento(procId);
-              // actualizamos el estado local directo (sin recargar) pa que se vea cancelado al toque
+              // actualizar el estado local directo (sin recargar) pa que se vea cancelado al toque
               setProc((prev) =>
                 prev ? { ...prev, estado_nombre: "cancelado" } : prev,
               );
@@ -432,7 +431,7 @@ export default function ProcesamientoScreen() {
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#2d6a4f" />
 
-        {/* Fase 1: subida del video */}
+        {/*subida del video */}
         {subiendo ? (
           <>
             <Text style={styles.procesandoTitle}>Subiendo video...</Text>
@@ -450,7 +449,7 @@ export default function ProcesamientoScreen() {
           </>
         ) : (
           <>
-            {/* Fase 2: procesamiento GPU */}
+            {/*procesamiento GPU */}
             <Text style={styles.procesandoTitle}>Procesando video con IA</Text>
 
             {hayParcial && (
@@ -590,7 +589,7 @@ export default function ProcesamientoScreen() {
         )}
       </View>
 
-      {/* Comparación */}
+      {/*Comparación*/}
       {comparacion?.hay_historial && (
         <View style={styles.comparCard}>
           <Text style={styles.sectionLabel}>Ciclo anterior</Text>
@@ -632,7 +631,7 @@ export default function ProcesamientoScreen() {
         </View>
       )}
 
-      {/* Ajuste manual */}
+      {/*Ajuste manual*/}
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>Ajuste manual</Text>
         {proc.conteo_estado_nombre === "completado" ? (

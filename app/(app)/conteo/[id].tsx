@@ -660,7 +660,7 @@ export default function ConteoDetalleScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* CONTENEDOR DE COBERTURA Y BOTÓN COMPLETAR */}
+        {/*contenedor de cobertura y botón completar */}
         {!completado && conteo.conteo_total_acumulado > 0 && (
           <View style={styles.coberturaWrapper}>
             <View style={styles.coberturaHeader}>
