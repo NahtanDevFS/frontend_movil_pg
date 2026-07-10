@@ -161,7 +161,7 @@ export default function NuevoConteoScreen() {
       setSubiendo(true);
       setProgresoSubida(0);
 
-      //registramos el procesamiento en la BD (rapido, sin el archivo)
+      //registramos el procesamiento en la BD
       const proc = await registrarProcesamiento({
         conteo_id: conteoSeleccionado.id,
         surco_inicio: inicio,

@@ -184,7 +184,6 @@ export default function ProcesamientoScreen() {
           videoUri = parsed.uri;
           mimeType = parsed.mimeType ?? undefined;
         } catch {
-          // por compatibilidad con el formato viejo (antes era solo un string)
           videoUri = raw;
           mimeType = undefined;
         }
@@ -230,7 +229,7 @@ export default function ProcesamientoScreen() {
           }
         }
       } catch {
-        // si algo falla leyendo AsyncStorage, ni modo, no mostramos barra
+        // si algo falla leyendo AsyncStorage, no mostramos barra
       }
     })();
   }, [procId]);
@@ -253,6 +252,7 @@ export default function ProcesamientoScreen() {
 
   const handleGuardarAjuste = async () => {
     if (!proc) return;
+    if (proc.conteo_estado_nombre === "completado") return;
     const valor = parseInt(conteoAjustado);
     if (isNaN(valor) || valor < 0)
       return Alert.alert(
@@ -635,37 +635,49 @@ export default function ProcesamientoScreen() {
       {/* Ajuste manual */}
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>Ajuste manual</Text>
-        <Text style={styles.sectionSub}>
-          Corrige el conteo si detectas oclusiones severas en el video.
-        </Text>
-        <View style={styles.ajusteRow}>
-          <TextInput
-            style={[styles.input, { flex: 1 }]}
-            value={conteoAjustado}
-            onChangeText={setConteoAjustado}
-            keyboardType="number-pad"
-            placeholderTextColor="#a0b5a8"
-          />
-          <TouchableOpacity
-            style={[styles.btnSmall, guardandoAjuste && styles.btnDisabled]}
-            onPress={handleGuardarAjuste}
-            disabled={guardandoAjuste}
-          >
-            {guardandoAjuste ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.btnSmallText}>Guardar</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-        <TextInput
-          style={[styles.input, { minHeight: 56, marginTop: 8 }]}
-          value={obsAjuste}
-          onChangeText={setObsAjuste}
-          placeholder="Observaciones (opcional)"
-          placeholderTextColor="#a0b5a8"
-          multiline
-        />
+        {proc.conteo_estado_nombre === "completado" ? (
+          <View style={styles.avisoConteoCompletado}>
+            <Ionicons name="lock-closed-outline" size={16} color="#8fa898" />
+            <Text style={styles.avisoConteoCompletadoText}>
+              Este conteo está completado. Para realizar ajustes manuales, un
+              administrador debe reabrirlo primero.
+            </Text>
+          </View>
+        ) : (
+          <>
+            <Text style={styles.sectionSub}>
+              Corrige el conteo si detectas oclusiones severas en el video.
+            </Text>
+            <View style={styles.ajusteRow}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                value={conteoAjustado}
+                onChangeText={setConteoAjustado}
+                keyboardType="number-pad"
+                placeholderTextColor="#a0b5a8"
+              />
+              <TouchableOpacity
+                style={[styles.btnSmall, guardandoAjuste && styles.btnDisabled]}
+                onPress={handleGuardarAjuste}
+                disabled={guardandoAjuste}
+              >
+                {guardandoAjuste ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.btnSmallText}>Guardar</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={[styles.input, { minHeight: 56, marginTop: 8 }]}
+              value={obsAjuste}
+              onChangeText={setObsAjuste}
+              placeholder="Observaciones (opcional)"
+              placeholderTextColor="#a0b5a8"
+              multiline
+            />
+          </>
+        )}
       </View>
 
       {/* Acciones */}
