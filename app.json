@@ -25,7 +25,7 @@
     "plugins": ["expo-router", "expo-secure-store", "expo-asset"],
     "scheme": "meloncount",
     "extra": {
-      "apiUrl": "https://reluctant-smartly-muppet.ngrok-free.dev",
+      "apiUrl": "https://api.meloncount.win",
       "router": {},
       "eas": {
         "projectId": "92b1d13b-241f-43a5-8a26-fa6385c55c23"

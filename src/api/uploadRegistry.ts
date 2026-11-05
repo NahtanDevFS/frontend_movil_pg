@@ -1,11 +1,17 @@
 // registro global de las subidas activas: evita que dos pantallas suban lo mismo y deja que cualquiera se enganche al progreso
 
-type Listener = (pct: number) => void;
+export interface ProgresoSubida {
+  pct: number;
+  bytesSubidos: number;
+  bytesTotales: number;
+}
+
+type Listener = (progreso: ProgresoSubida) => void;
 
 interface SubidaActiva {
   promise: Promise<void>;
   cancelar: () => Promise<void>;
-  progresoActual: number;
+  progresoActual: ProgresoSubida;
   listeners: Set<Listener>;
 }
 
@@ -16,27 +22,29 @@ export function registrarSubidaActiva(
   procesamientoId: number,
   promise: Promise<void>,
   cancelar: () => Promise<void>,
-): (pct: number) => void {
+): Listener {
   const entry: SubidaActiva = {
     promise,
     cancelar,
-    progresoActual: 0,
+    progresoActual: { pct: 0, bytesSubidos: 0, bytesTotales: 0 },
     listeners: new Set(),
   };
   subidasActivas.set(procesamientoId, entry);
 
   // al terminar (bien o mal) se limpia solo
-  promise.finally(() => {
-    // solo si sigue siendo la misma entrada, por si la reemplazaron
-    if (subidasActivas.get(procesamientoId) === entry) {
-      subidasActivas.delete(procesamientoId);
-    }
-  });
+  promise
+    .finally(() => {
+      // solo si sigue siendo la misma entrada, por si la reemplazaron
+      if (subidasActivas.get(procesamientoId) === entry) {
+        subidasActivas.delete(procesamientoId);
+      }
+    })
+    .catch(() => {}); // el error lo maneja quien se suscribe
 
   // devuelve el onProgress que alimenta este registro y avisa a todos los listeners
-  return (pct: number) => {
-    entry.progresoActual = pct;
-    entry.listeners.forEach((fn) => fn(pct));
+  return (progreso) => {
+    entry.progresoActual = progreso;
+    entry.listeners.forEach((fn) => fn(progreso));
   };
 }
 
@@ -48,7 +56,7 @@ export function haySubidaActiva(procesamientoId: number): boolean {
 // suscribe un listener al progreso de una subida activa, devuelve null si no hay ninguna pa ese id
 export function suscribirseASubidaActiva(
   procesamientoId: number,
-  onProgress: (pct: number) => void,
+  onProgress: Listener,
 ): {
   promise: Promise<void>;
   cancelar: () => Promise<void>;

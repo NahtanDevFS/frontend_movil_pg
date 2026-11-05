@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   TextInput,
   RefreshControl,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
@@ -45,6 +45,12 @@ const CONF_COLOR: Record<string, string> = {
   moderado: "#856404",
   bajo: "#991b1b",
 };
+// aviso en la fila de los videos que aun ocupan surcos pero no tienen resultado
+const ESTADO_SIN_RESULTADO: Record<string, string> = {
+  pendiente: "Subida sin terminar",
+  procesando: "Procesando",
+  error: "Falló · toca para liberar sus surcos",
+};
 // a partir de cuantos videos la lista usa scroll interno en vez de crecer y crecer
 const MAX_VIDEOS_SIN_SCROLL = 5;
 // alto maximo del contenedor scrollable de videos (unas 4-5 filas)
@@ -74,6 +80,11 @@ function VideosLista({
               p.resultado.conteo_ajustado ?? p.resultado.conteo_ia
             ).toLocaleString()}{" "}
             melones
+          </Text>
+        )}
+        {!p.resultado && p.estado_nombre && ESTADO_SIN_RESULTADO[p.estado_nombre] && (
+          <Text style={styles.procEstado}>
+            {ESTADO_SIN_RESULTADO[p.estado_nombre]}
           </Text>
         )}
       </View>
@@ -179,9 +190,12 @@ export default function ConteoDetalleScreen() {
     }
   }, [conteoId]);
 
-  useEffect(() => {
-    cargar();
-  }, [cargar]);
+  // recarga al volver de un video, pa que se vea si lo anularon o liberaron sus surcos
+  useFocusEffect(
+    useCallback(() => {
+      cargar();
+    }, [cargar]),
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -906,6 +920,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#f4f7f5",
   },
   procSurcos: { fontSize: 13, fontWeight: "600", color: "#1a2e25" },
+  procEstado: { fontSize: 12, color: "#991b1b", marginTop: 2 },
   procTotal: {
     fontSize: 18,
     fontWeight: "800",

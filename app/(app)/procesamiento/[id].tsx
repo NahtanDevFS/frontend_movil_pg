@@ -23,9 +23,17 @@ import {
   getProgreso,
   cancelarProcesamiento,
   anularProcesamientoCompletado,
+  hayVideoLocal,
+  limpiarSubidaLocal,
+  reanudarSubida,
+  MENSAJE_SUBIDA_CANCELADA,
 } from "../../../src/api/endpoints";
 import { TOKEN_KEY } from "../../../src/api/client";
-import { suscribirseASubidaActiva } from "../../../src/api/uploadRegistry";
+import {
+  haySubidaActiva,
+  ProgresoSubida,
+  suscribirseASubidaActiva,
+} from "../../../src/api/uploadRegistry";
 import {
   ProcesamientoVideo,
   Conteo,
@@ -50,12 +58,13 @@ const CONF_LABEL: Record<string, string> = {
   bajo: "Baja confiabilidad",
 };
 
+const fmtTamano = (bytes: number) => {
+  const mb = bytes / (1024 * 1024);
+  return mb < 1024 ? `${Math.round(mb)} MB` : `${(mb / 1024).toFixed(1)} GB`;
+};
+
 export default function ProcesamientoScreen() {
-  // el param subidaEnCurso ya no manda, la barra se detecta sola por el registro en memoria o AsyncStorage; lo dejamos por compatibilidad
-  const { id } = useLocalSearchParams<{
-    id: string;
-    subidaEnCurso?: string;
-  }>();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const procId = Number(id);
   const router = useRouter();
 
@@ -74,8 +83,19 @@ export default function ProcesamientoScreen() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // progreso de la subida (null = no hay subida), se resuelve al montar mirando el registro en memoria o AsyncStorage
-  const [progresoSubida, setProgresoSubida] = useState<number | null>(null);
-  const subidaResueltaRef = useRef(false);
+  const [progresoSubida, setProgresoSubida] = useState<ProgresoSubida | null>(
+    null,
+  );
+  // false hasta saber si hay subida viva, pa no mostrar "interrumpida" por error al abrir la pantalla
+  const [subidaVerificada, setSubidaVerificada] = useState(false);
+  const [errorSubida, setErrorSubida] = useState<string | null>(null);
+  const [puedeReintentar, setPuedeReintentar] = useState(false);
+  const [reintentando, setReintentando] = useState(false);
+  const subidaRef = useRef<{
+    cancelar: () => Promise<void>;
+    desuscribir: () => void;
+  } | null>(null);
+  const cargadoRef = useRef(false);
 
   const [conteoAjustado, setConteoAjustado] = useState("");
   const [obsAjuste, setObsAjuste] = useState("");
@@ -91,7 +111,12 @@ export default function ProcesamientoScreen() {
   const cargar = useCallback(async () => {
     try {
       const p = await getProcesamiento(procId);
+      cargadoRef.current = true;
       setProc(p);
+      // si la subida ya no aplica (cancelada desde la web, ya procesando), borramos lo que quedo en el telefono
+      if (p.estado_nombre !== "pendiente" && !haySubidaActiva(procId)) {
+        limpiarSubidaLocal(procId).catch(() => {});
+      }
       if (p.resultado) {
         setProcesando(false);
         if (pollRef.current) {
@@ -125,114 +150,61 @@ export default function ProcesamientoScreen() {
         }
       }
     } catch {
-      Alert.alert("Error", "No se pudo cargar el resultado.");
+      // el poll corre cada 4s: solo avisamos si ni siquiera pudimos cargar la primera vez
+      if (!cargadoRef.current) {
+        Alert.alert("Error", "No se pudo cargar el resultado.");
+      }
     } finally {
       setLoading(false);
     }
   }, [procId]);
 
+  // se cuelga del progreso de la subida viva, devuelve false si no hay ninguna
+  const conectarSubida = useCallback(() => {
+    const suscripcion = suscribirseASubidaActiva(procId, setProgresoSubida);
+    if (!suscripcion) return false;
+
+    subidaRef.current = suscripcion;
+    setErrorSubida(null);
+    suscripcion.promise
+      .then(async () => {
+        // primero recargamos pa que la barra no se quite antes de ver el estado 'procesando'
+        await cargar();
+        setProgresoSubida(null);
+      })
+      .catch(async (err: any) => {
+        setProgresoSubida(null);
+        const msg: string = err?.message ?? "No se pudo subir el video.";
+        if (msg !== MENSAJE_SUBIDA_CANCELADA) setErrorSubida(msg);
+        setPuedeReintentar(await hayVideoLocal(procId).catch(() => false));
+      })
+      .finally(() => {
+        suscripcion.desuscribir();
+        subidaRef.current = null;
+      });
+    return true;
+  }, [procId, cargar]);
+
   // muestra y/o retoma la subida del video sin importar como llegamos a esta pantalla
   useEffect(() => {
-    if (subidaResueltaRef.current) return;
-
-    // 1. si ya hay una subida corriendo en memoria, solo nos colgamos de su progreso, no lanzamos otra
-    const suscripcion = suscribirseASubidaActiva(procId, (pct) => {
-      setProgresoSubida(pct);
-    });
-
-    if (suscripcion) {
-      subidaResueltaRef.current = true;
-      setProgresoSubida(0); // valor inicial mientras llega la primera actualización
-
-      const AsyncStoragePromise =
-        import("@react-native-async-storage/async-storage");
-
-      suscripcion.promise
-        .then(async () => {
-          setProgresoSubida(null);
-          const AsyncStorage = (await AsyncStoragePromise).default;
-          await AsyncStorage.removeItem(`subida:${procId}`).catch(() => {});
-        })
-        .catch(async () => {
-          setProgresoSubida(null);
-          const AsyncStorage = (await AsyncStoragePromise).default;
-          await AsyncStorage.removeItem(`subida:${procId}`).catch(() => {});
-          // el error ya lo alerta quien arranco la subida, aca solo limpiamos lo visual pa no duplicar el aviso
-        })
-        .finally(() => {
-          suscripcion.desuscribir();
-        });
-
-      return () => {
-        suscripcion.desuscribir();
-      };
-    }
-
-    // 2. si no hay en memoria pero quedo una pendiente en AsyncStorage (app cerrada y reabierta), la retomamos
     (async () => {
       try {
-        const AsyncStorage = (
-          await import("@react-native-async-storage/async-storage")
-        ).default;
-        const raw = await AsyncStorage.getItem(`subida:${procId}`);
-        if (!raw) return; // no hay nada pendiente, no mostramos barra
-
-        let videoUri: string;
-        let mimeType: string | undefined;
-        try {
-          const parsed = JSON.parse(raw);
-          videoUri = parsed.uri;
-          mimeType = parsed.mimeType ?? undefined;
-        } catch {
-          videoUri = raw;
-          mimeType = undefined;
+        // si la app se cerro a medias quedo anotada en AsyncStorage y aca se retoma
+        await reanudarSubida(procId);
+        if (!conectarSubida()) {
+          setPuedeReintentar(await hayVideoLocal(procId));
         }
-
-        const SecureStore = await import("expo-secure-store");
-        const { TOKEN_KEY } = await import("../../../src/api/client");
-        const { subirVideoBackground, cancelarProcesamiento } =
-          await import("../../../src/api/endpoints");
-        const token = (await SecureStore.getItemAsync(TOKEN_KEY)) ?? "";
-
-        subidaResueltaRef.current = true;
-        setProgresoSubida(0);
-
-        const subida = subirVideoBackground(
-          procId,
-          videoUri,
-          token,
-          (pct) => setProgresoSubida(pct),
-          mimeType,
-        );
-
-        try {
-          await subida.promise;
-          // subida ok: borramos el uri guardado y quitamos la barra
-          await AsyncStorage.removeItem(`subida:${procId}`);
-          setProgresoSubida(null);
-          // el estado va a pasar a 'procesando' y el poll lo va a agarrar
-        } catch (err: any) {
-          await AsyncStorage.removeItem(`subida:${procId}`);
-          setProgresoSubida(null);
-          const msg: string = err?.message ?? "No se pudo subir el video.";
-          if (msg !== "Subida cancelada.") {
-            try {
-              await cancelarProcesamiento(procId);
-            } catch {
-              /* ignorar */
-            }
-            Alert.alert(
-              "Error al subir el video",
-              msg +
-                "\n\nEl procesamiento fue cancelado. Puedes intentarlo de nuevo.",
-            );
-          }
-        }
-      } catch {
-        // si algo falla leyendo AsyncStorage, no mostramos barra
+      } catch (err: any) {
+        setErrorSubida(err?.message ?? "No se pudo retomar la subida.");
+      } finally {
+        setSubidaVerificada(true);
       }
     })();
-  }, [procId]);
+
+    return () => {
+      subidaRef.current?.desuscribir();
+    };
+  }, [procId, conectarSubida]);
 
   useEffect(() => {
     cargar();
@@ -274,6 +246,28 @@ export default function ProcesamientoScreen() {
     }
   };
 
+  // cancela en el server y libera el rango de surcos
+  const ejecutarCancelacion = async () => {
+    setCancelando(true);
+    try {
+      await cancelarProcesamiento(procId);
+      await limpiarSubidaLocal(procId);
+      // actualizamos el estado local directo (sin recargar) pa que se vea cancelado al toque
+      setProc((prev) =>
+        prev ? { ...prev, estado_nombre: "cancelado" } : prev,
+      );
+      setProcesando(true); // fuerza la rama de estado terminal
+    } catch (err: any) {
+      Alert.alert(
+        "Error",
+        err.response?.data?.detail ??
+          "No se pudo cancelar. Revisa tu conexión e inténtalo de nuevo.",
+      );
+    } finally {
+      setCancelando(false);
+    }
+  };
+
   const handleCancelarProcesamiento = () => {
     Alert.alert(
       "Cancelar procesamiento",
@@ -283,32 +277,60 @@ export default function ProcesamientoScreen() {
         {
           text: "Sí, cancelar",
           style: "destructive",
+          onPress: ejecutarCancelacion,
+        },
+      ],
+    );
+  };
+
+  const handleCancelarSubida = () => {
+    Alert.alert(
+      "Cancelar subida",
+      "¿Seguro que deseas cancelar la subida? Lo que ya se subió se descartará y su rango de surcos quedará libre.",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Sí, cancelar",
+          style: "destructive",
           onPress: async () => {
-            setCancelando(true);
-            // paramos el polling antes de cancelar, pa que ningun tick en vuelo dispare una alerta de error
-            if (pollRef.current) {
-              clearInterval(pollRef.current);
-              pollRef.current = null;
-            }
-            try {
-              await cancelarProcesamiento(procId);
-              // actualizamos el estado local directo (sin recargar) pa que se vea cancelado al toque
-              setProc((prev) =>
-                prev ? { ...prev, estado_nombre: "cancelado" } : prev,
-              );
-              setProcesando(true); // fuerza la rama de estado terminal
-            } catch (err: any) {
-              Alert.alert(
-                "Error",
-                err.response?.data?.detail ?? "No se pudo cancelar.",
-              );
-            } finally {
-              setCancelando(false);
-            }
+            await subidaRef.current?.cancelar();
+            // sin conexion igual queda detenida; se descarta el video pa que no se retome sola
+            await limpiarSubidaLocal(procId);
+            setPuedeReintentar(false);
+            setProgresoSubida(null);
+            await ejecutarCancelacion();
           },
         },
       ],
     );
+  };
+
+  const handleLiberarSurcos = () => {
+    Alert.alert(
+      "Liberar surcos",
+      "Se descartará este video y su rango de surcos quedará libre para volver a subirlo. ¿Continuar?",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Sí, liberar",
+          style: "destructive",
+          onPress: ejecutarCancelacion,
+        },
+      ],
+    );
+  };
+
+  const handleReintentarSubida = async () => {
+    setReintentando(true);
+    setErrorSubida(null);
+    try {
+      await reanudarSubida(procId);
+      conectarSubida();
+    } catch (err: any) {
+      setErrorSubida(err?.message ?? "No se pudo retomar la subida.");
+    } finally {
+      setReintentando(false);
+    }
   };
 
   const handleDescargarVideo = async () => {
@@ -408,8 +430,22 @@ export default function ProcesamientoScreen() {
           <Text style={styles.procesandoSub}>
             {estado === "cancelado"
               ? "Este video fue cancelado. Su rango de surcos quedó libre para volver a intentarlo."
-              : "Ocurrió un error al procesar el video. Puedes registrar el video nuevamente."}
+              : "Ocurrió un error al procesar el video. Libera sus surcos para poder subirlo de nuevo."}
           </Text>
+          {estado === "error" && (
+            <TouchableOpacity
+              style={styles.btnCancelarProc}
+              onPress={handleLiberarSurcos}
+              disabled={cancelando}
+              activeOpacity={0.85}
+            >
+              {cancelando ? (
+                <ActivityIndicator size="small" color="#991b1b" />
+              ) : (
+                <Text style={styles.btnCancelarProcText}>Liberar surcos</Text>
+              )}
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={styles.btnVolver}
             onPress={() => router.back()}
@@ -427,6 +463,61 @@ export default function ProcesamientoScreen() {
     const puedeCancelar = estado === "pendiente" || estado === "procesando";
     // si hay progresoSubida es que la subida sigue en curso
     const subiendo = progresoSubida !== null;
+    // en 0 todavia no se confirma el primer bloque
+    const conectando = subiendo && progresoSubida.bytesSubidos === 0;
+
+    // pendiente sin subida viva: todavia lo estamos comprobando o la subida se quedo a medias
+    if (estado === "pendiente" && !subiendo) {
+      if (!subidaVerificada)
+        return (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color="#2d6a4f" />
+          </View>
+        );
+
+      return (
+        <View style={styles.centered}>
+          <Ionicons name="cloud-offline-outline" size={56} color="#991b1b" />
+          <Text style={styles.procesandoTitle}>
+            La subida no se completó
+          </Text>
+          <Text style={styles.procesandoSub}>
+            {errorSubida ?? "No hay una subida activa en este teléfono."}
+          </Text>
+          <Text style={styles.procesandoHint}>
+            {puedeReintentar
+              ? "Puedes continuar desde donde se quedó o liberar sus surcos."
+              : "El video ya no está disponible aquí. Libera sus surcos para subirlo de nuevo."}
+          </Text>
+          {puedeReintentar && (
+            <TouchableOpacity
+              style={styles.btnVolver}
+              onPress={handleReintentarSubida}
+              disabled={reintentando}
+              activeOpacity={0.85}
+            >
+              {reintentando ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.btnVolverText}>Reintentar subida</Text>
+              )}
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.btnCancelarProc}
+            onPress={handleLiberarSurcos}
+            disabled={cancelando}
+            activeOpacity={0.85}
+          >
+            {cancelando ? (
+              <ActivityIndicator size="small" color="#991b1b" />
+            ) : (
+              <Text style={styles.btnCancelarProcText}>Liberar surcos</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      );
+    }
 
     return (
       <View style={styles.centered}>
@@ -435,18 +526,51 @@ export default function ProcesamientoScreen() {
         {/* Fase 1: subida del video */}
         {subiendo ? (
           <>
-            <Text style={styles.procesandoTitle}>Subiendo video...</Text>
+            <Text style={styles.procesandoTitle}>
+              {conectando ? "Conectando..." : "Subiendo video..."}
+            </Text>
             <View style={styles.barraWrap}>
               <View style={styles.barraTrack}>
                 <View
-                  style={[styles.barraFill, { width: `${progresoSubida}%` }]}
+                  style={[
+                    styles.barraFill,
+                    { width: `${progresoSubida.pct}%` },
+                  ]}
                 />
               </View>
-              <Text style={styles.barraPct}>{progresoSubida}%</Text>
+              <Text style={styles.barraPct}>{progresoSubida.pct}%</Text>
             </View>
+            {!conectando && (
+              <Text style={styles.subidaBytes}>
+                {fmtTamano(progresoSubida.bytesSubidos)} de{" "}
+                {fmtTamano(progresoSubida.bytesTotales)}
+              </Text>
+            )}
             <Text style={styles.procesandoSub}>
-              Puedes navegar libremente. La subida continúa en segundo plano.
+              Mantén la app abierta hasta que termine. Si se interrumpe, podrás
+              continuar desde donde se quedó.
             </Text>
+            <TouchableOpacity
+              style={styles.btnCancelarProc}
+              onPress={handleCancelarSubida}
+              disabled={cancelando}
+              activeOpacity={0.85}
+            >
+              {cancelando ? (
+                <ActivityIndicator size="small" color="#991b1b" />
+              ) : (
+                <>
+                  <Ionicons
+                    name="close-circle-outline"
+                    size={16}
+                    color="#991b1b"
+                  />
+                  <Text style={styles.btnCancelarProcText}>
+                    Cancelar subida
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
           </>
         ) : (
           <>
@@ -951,6 +1075,12 @@ const styles = StyleSheet.create({
     color: "#2d6a4f",
     minWidth: 36,
     textAlign: "right",
+  },
+  subidaBytes: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#2d6a4f",
+    marginTop: 8,
   },
   btnCancelarProc: {
     flexDirection: "row",

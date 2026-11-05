@@ -8,10 +8,18 @@ import {
   Variedad,
   Calibre,
 } from "../types";
-import * as FileSystem from "expo-file-system/legacy";
+import { File } from "expo-file-system";
+import { fetch, FetchRequestInit } from "expo/fetch";
+import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
+import * as SecureStore from "expo-secure-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { TOKEN_KEY } from "./client";
-import { registrarSubidaActiva } from "./uploadRegistry";
+import {
+  haySubidaActiva,
+  ProgresoSubida,
+  registrarSubidaActiva,
+} from "./uploadRegistry";
 import { conCacheDeRespaldo } from "../offline/cacheStore";
 
 // auth
@@ -176,6 +184,14 @@ const MAX_REINTENTOS = 3;
 // backoff base en ms, se duplica en cada reintento (2s, 4s, 8s)
 const BACKOFF_BASE_MS = 2000;
 
+// timeouts pa que una conexion colgada no deje la barra congelada para siempre
+const TIMEOUT_CONSULTA_MS = 30 * 1000;
+const TIMEOUT_CHUNK_MS = 3 * 60 * 1000;
+// el ultimo chunk tarda mas porque el server ensambla el video antes de responder
+const TIMEOUT_ULTIMO_CHUNK_MS = 5 * 60 * 1000;
+
+export const MENSAJE_SUBIDA_CANCELADA = "Subida cancelada.";
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -200,16 +216,91 @@ function esReintentable(err: unknown): boolean {
   return true;
 }
 
+// el video pendiente queda anotado en AsyncStorage pa poder reanudar aunque cierren la app
+interface SubidaPendiente {
+  uri: string;
+  mimeType?: string;
+}
+
+const claveSubida = (procesamientoId: number) => `subida:${procesamientoId}`;
+
+const leerSubidaPendiente = async (
+  procesamientoId: number,
+): Promise<SubidaPendiente | null> => {
+  const raw = await AsyncStorage.getItem(claveSubida(procesamientoId));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return { uri: parsed.uri, mimeType: parsed.mimeType ?? undefined };
+  } catch {
+    return { uri: raw };
+  }
+};
+
+export const guardarSubidaPendiente = async (
+  procesamientoId: number,
+  uri: string,
+  mimeType?: string | null,
+): Promise<void> => {
+  await AsyncStorage.setItem(
+    claveSubida(procesamientoId),
+    JSON.stringify({ uri, mimeType: mimeType ?? null }),
+  );
+};
+
+// true si todavia tenemos el video en el telefono pa reintentar
+export const hayVideoLocal = async (
+  procesamientoId: number,
+): Promise<boolean> => {
+  const pendiente = await leerSubidaPendiente(procesamientoId);
+  return !!pendiente && new File(pendiente.uri).exists;
+};
+
+// borra la copia del video y la nota de AsyncStorage
+export const limpiarSubidaLocal = async (
+  procesamientoId: number,
+): Promise<void> => {
+  const pendiente = await leerSubidaPendiente(procesamientoId);
+  if (pendiente) {
+    try {
+      const archivo = new File(pendiente.uri);
+      if (archivo.exists) archivo.delete();
+    } catch {
+      // da igual, no es critico
+    }
+  }
+  await AsyncStorage.removeItem(claveSubida(procesamientoId));
+};
+
 export interface SubidaControlada {
   promise: Promise<void>;
   cancelar: () => Promise<void>;
 }
 
-export const subirVideoBackground = (
+const extensionDeVideo = (videoUri: string, mimeType?: string): string => {
+  if (mimeType) {
+    const mimeMap: Record<string, string> = {
+      "video/mp4": "mp4",
+      "video/quicktime": "mov",
+      "video/x-msvideo": "avi",
+      "video/x-matroska": "mkv",
+      "video/mov": "mov",
+    };
+    return mimeMap[mimeType.toLowerCase()] ?? "mp4";
+  }
+  const uriLimpio = videoUri.split("?")[0];
+  const partes = uriLimpio.split(".");
+  if (partes.length > 1) {
+    const ext = partes.pop()!.toLowerCase();
+    if (["mp4", "mov", "avi", "mkv"].includes(ext)) return ext;
+  }
+  return "mp4";
+};
+
+const subirVideoBackground = (
   procesamientoId: number,
   videoUri: string,
   token: string,
-  onProgress?: (pct: number) => void,
   mimeType?: string,
 ): SubidaControlada => {
   const apiUrl =
@@ -217,172 +308,200 @@ export const subirVideoBackground = (
     "http://localhost:8000";
 
   let cancelado = false;
+  // la peticion que este en vuelo, pa poder cortarla al cancelar
+  let peticionActual: AbortController | null = null;
 
   const cancelar = async () => {
     cancelado = true;
+    peticionActual?.abort();
   };
 
-  // se engancha al registro global cuando ya exista la promise, mientras tanto guarda el ultimo valor
-  let emitirAlRegistro: ((pct: number) => void) | null = null;
-  const reportarProgreso = (pct: number) => {
-    if (onProgress) onProgress(pct);
-    if (emitirAlRegistro) emitirAlRegistro(pct);
+  const fetchConTimeout = async (
+    url: string,
+    init: FetchRequestInit,
+    timeoutMs: number,
+  ) => {
+    const control = new AbortController();
+    peticionActual = control;
+    const timer = setTimeout(() => control.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...init, signal: control.signal });
+    } finally {
+      clearTimeout(timer);
+    }
   };
+
+  // se engancha al registro global cuando ya exista la promise
+  let emitirAlRegistro: ((progreso: ProgresoSubida) => void) | null = null;
+  const reportarProgreso = (progreso: ProgresoSubida) => {
+    if (emitirAlRegistro) emitirAlRegistro(progreso);
+  };
+
+  const keepAwakeTag = `subida-${procesamientoId}`;
 
   const promise = (async () => {
-    // copiamos al cacheDirectory pa tener acceso file:// (Android devuelve content:// que readAsString no lee)
-    const extension = (() => {
-      if (mimeType) {
-        const mimeMap: Record<string, string> = {
-          "video/mp4": "mp4",
-          "video/quicktime": "mov",
-          "video/x-msvideo": "avi",
-          "video/x-matroska": "mkv",
-          "video/mov": "mov",
-        };
-        return mimeMap[mimeType.toLowerCase()] ?? "mp4";
-      }
-      const uriLimpio = videoUri.split("?")[0];
-      const partes = uriLimpio.split(".");
-      if (partes.length > 1) {
-        const ext = partes.pop()!.toLowerCase();
-        if (["mp4", "mov", "avi", "mkv"].includes(ext)) return ext;
-      }
-      return "mp4";
-    })();
+    // mantiene la pantalla encendida, con la pantalla apagada Android puede congelar la subida
+    await activateKeepAwakeAsync(keepAwakeTag).catch(() => {});
 
-    const uriLocal = `${FileSystem.cacheDirectory}upload_${procesamientoId}.${extension}`;
-    await FileSystem.copyAsync({ from: videoUri, to: uriLocal });
-
-    if (cancelado) throw new Error("Subida cancelada.");
-
-    // sacamos el tamaño real del archivo ya copiado (con file:// el .size sale bien)
-    const info = await FileSystem.getInfoAsync(uriLocal);
-    if (!info.exists) throw new Error("No se pudo copiar el archivo al cache.");
-    const totalBytes = (info as any).size as number;
-    if (!totalBytes)
-      throw new Error("No se pudo determinar el tamaño del video.");
-
-    const totalChunks = Math.ceil(totalBytes / CHUNK_SIZE_BYTES);
-
-    // registramos la meta en el servidor antes de mandar los chunks
-    const authHeaders: Record<string, string> = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      "ngrok-skip-browser-warning": "true",
-    };
-
-    const initRes = await fetch(
-      `${apiUrl}/procesamientos/${procesamientoId}/video/iniciar-chunks`,
-      {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({ extension, total_chunks: totalChunks }),
-      },
-    );
-    if (!initRes.ok) {
-      const errBody = await initRes.json().catch(() => ({}));
-      throw new Error(
-        errBody?.detail ?? `Error al iniciar subida (${initRes.status})`,
-      );
-    }
-
-    if (cancelado) throw new Error("Subida cancelada.");
-
-    // preguntamos desde que chunk reanudar por si ya se habia subido algo
-    let desdeChunk = 0;
     try {
-      const estadoRes = await fetch(
-        `${apiUrl}/procesamientos/${procesamientoId}/video/estado-subida`,
-        { headers: authHeaders },
+      // el picker ya dejo el video en cache (file://), no hace falta otra copia
+      const archivo = new File(videoUri);
+      if (!archivo.exists)
+        throw new Error(
+          "El video ya no está en el teléfono. Selecciónalo de nuevo.",
+        );
+      const totalBytes = archivo.size;
+      if (!totalBytes)
+        throw new Error("No se pudo determinar el tamaño del video.");
+
+      const extension = extensionDeVideo(videoUri, mimeType);
+      const totalChunks = Math.ceil(totalBytes / CHUNK_SIZE_BYTES);
+
+      const reportarChunks = (chunksListos: number) =>
+        reportarProgreso({
+          pct: Math.round((chunksListos / totalChunks) * 100),
+          bytesSubidos: Math.min(chunksListos * CHUNK_SIZE_BYTES, totalBytes),
+          bytesTotales: totalBytes,
+        });
+
+      // registramos la meta en el servidor antes de mandar los chunks
+      const authHeaders: Record<string, string> = {
+        Authorization: `Bearer ${token}`,
+        "ngrok-skip-browser-warning": "true",
+      };
+
+      const initRes = await fetchConTimeout(
+        `${apiUrl}/procesamientos/${procesamientoId}/video/iniciar-chunks`,
+        {
+          method: "POST",
+          headers: { ...authHeaders, "Content-Type": "application/json" },
+          body: JSON.stringify({ extension, total_chunks: totalChunks }),
+        },
+        TIMEOUT_CONSULTA_MS,
       );
-      if (estadoRes.ok) {
-        const estado = await estadoRes.json();
-        const ultimo: number = estado.ultimo_chunk_recibido ?? -1;
-        if (ultimo >= 0 && ultimo < totalChunks - 1) {
-          desdeChunk = ultimo + 1;
-          if (onProgress || emitirAlRegistro)
-            reportarProgreso(Math.round((desdeChunk / totalChunks) * 100));
-        }
+      if (!initRes.ok) {
+        const errBody = await initRes.json().catch(() => ({}));
+        throw new Error(
+          errBody?.detail ?? `Error al iniciar subida (${initRes.status})`,
+        );
       }
-    } catch {
-      // si falla, arrancamos desde 0
-    }
 
-    // mandamos chunk por chunk leyendo por rango de bytes (position/length)
-    for (let i = desdeChunk; i < totalChunks; i++) {
-      if (cancelado) throw new Error("Subida cancelada.");
+      if (cancelado) throw new Error(MENSAJE_SUBIDA_CANCELADA);
 
-      const offset = i * CHUNK_SIZE_BYTES;
-      const length = Math.min(CHUNK_SIZE_BYTES, totalBytes - offset);
+      // preguntamos desde que chunk reanudar por si ya se habia subido algo
+      let desdeChunk = 0;
+      try {
+        const estadoRes = await fetchConTimeout(
+          `${apiUrl}/procesamientos/${procesamientoId}/video/estado-subida`,
+          { headers: authHeaders },
+          TIMEOUT_CONSULTA_MS,
+        );
+        if (estadoRes.ok) {
+          const estado = await estadoRes.json();
+          const ultimo: number = estado.ultimo_chunk_recibido ?? -1;
+          if (ultimo >= 0 && ultimo < totalChunks - 1) {
+            desdeChunk = ultimo + 1;
+            reportarChunks(desdeChunk);
+          }
+        }
+      } catch {
+        // si falla, arrancamos desde 0
+      }
 
-      const b64 = await FileSystem.readAsStringAsync(uriLocal, {
-        encoding: FileSystem.EncodingType.Base64,
-        position: offset,
-        length,
-      });
+      // mandamos chunk por chunk en binario, leyendo por rango de bytes
+      const lector = archivo.open();
+      try {
+        for (let i = desdeChunk; i < totalChunks; i++) {
+          if (cancelado) throw new Error(MENSAJE_SUBIDA_CANCELADA);
 
-      // retry con backoff solo si el error es transitorio; los permanentes cortan al toque, reintentar no sirve
-      let intentos = 0;
-      let completo = false;
-      let enviado = false;
-      while (!enviado && intentos < MAX_REINTENTOS) {
-        if (cancelado) throw new Error("Subida cancelada.");
-        try {
-          const formBody = new FormData();
-          formBody.append("numero", String(i));
-          formBody.append("data_b64", b64);
-
-          const chunkRes = await fetch(
-            `${apiUrl}/procesamientos/${procesamientoId}/video/chunk`,
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${token}`,
-                "ngrok-skip-browser-warning": "true",
-              },
-              body: formBody,
-            },
+          const offset = i * CHUNK_SIZE_BYTES;
+          lector.offset = offset;
+          const datos = lector.readBytes(
+            Math.min(CHUNK_SIZE_BYTES, totalBytes - offset),
           );
+          const esUltimo = i === totalChunks - 1;
 
-          if (!chunkRes.ok) {
-            const errBody = await chunkRes.json().catch(() => ({}));
-            throw new ErrorChunk(
-              errBody?.detail ?? `Error en chunk ${i} (${chunkRes.status})`,
-              chunkRes.status,
-            );
+          // retry con backoff solo si el error es transitorio; los permanentes cortan al toque, reintentar no sirve
+          let intentos = 0;
+          let completo = false;
+          let enviado = false;
+          while (!enviado && intentos < MAX_REINTENTOS) {
+            if (cancelado) throw new Error(MENSAJE_SUBIDA_CANCELADA);
+            try {
+              const chunkRes = await fetchConTimeout(
+                `${apiUrl}/procesamientos/${procesamientoId}/video/chunk-bin?numero=${i}`,
+                {
+                  method: "POST",
+                  headers: {
+                    ...authHeaders,
+                    "Content-Type": "application/octet-stream",
+                  },
+                  body: datos,
+                },
+                esUltimo ? TIMEOUT_ULTIMO_CHUNK_MS : TIMEOUT_CHUNK_MS,
+              );
+
+              if (!chunkRes.ok) {
+                const errBody = await chunkRes.json().catch(() => ({}));
+                throw new ErrorChunk(
+                  errBody?.detail ?? `Error en chunk ${i} (${chunkRes.status})`,
+                  chunkRes.status,
+                );
+              }
+
+              const respJson = await chunkRes.json().catch(() => ({}));
+              enviado = true;
+              // si el server confirmo que recibio el ultimo chunk y ensamblo, salimos
+              if (respJson?.completo === true) completo = true;
+            } catch (err) {
+              if (cancelado) throw new Error(MENSAJE_SUBIDA_CANCELADA);
+              if (!esReintentable(err)) throw err;
+              intentos++;
+              if (intentos >= MAX_REINTENTOS) throw err;
+              await sleep(BACKOFF_BASE_MS * Math.pow(2, intentos - 1));
+            }
           }
 
-          const respJson = await chunkRes.json().catch(() => ({}));
-          enviado = true;
-          // si el server confirmo que recibio el ultimo chunk y ensamblo, salimos
-          if (respJson?.completo === true) completo = true;
-        } catch (err) {
-          if (!esReintentable(err)) throw err;
-          intentos++;
-          if (intentos >= MAX_REINTENTOS) throw err;
-          await sleep(BACKOFF_BASE_MS * Math.pow(2, intentos - 1));
+          reportarChunks(i + 1);
+
+          // si el server ya ensamblo, ya no hay nada mas que mandar
+          if (completo) break;
         }
+      } finally {
+        lector.close();
       }
 
-      reportarProgreso(Math.round(((i + 1) / totalChunks) * 100));
-
-      // si el server ya ensamblo, ya no hay nada mas que mandar
-      if (completo) break;
-    }
-
-    // borramos el archivo temporal del cache
-    try {
-      await FileSystem.deleteAsync(uriLocal, { idempotent: true });
-    } catch {
-      // da igual, no es critico
+      // ya no hace falta el video en el telefono; si falla se conserva pa poder reintentar
+      await limpiarSubidaLocal(procesamientoId);
+    } finally {
+      await deactivateKeepAwake(keepAwakeTag).catch(() => {});
     }
   })();
 
-  // registramos la subida en memoria pa que otras pantallas se enganchen a su progreso sin duplicarla
+  // registramos la subida en memoria pa que las pantallas se enganchen a su progreso sin duplicarla
   emitirAlRegistro = registrarSubidaActiva(procesamientoId, promise, cancelar);
 
   return { promise, cancelar };
+};
+
+// arranca o retoma la subida anotada en AsyncStorage, devuelve false si no hay nada que subir
+export const reanudarSubida = async (
+  procesamientoId: number,
+): Promise<boolean> => {
+  if (haySubidaActiva(procesamientoId)) return true;
+  const pendiente = await leerSubidaPendiente(procesamientoId);
+  if (!pendiente) return false;
+
+  const token = (await SecureStore.getItemAsync(TOKEN_KEY)) ?? "";
+  const subida = subirVideoBackground(
+    procesamientoId,
+    pendiente.uri,
+    token,
+    pendiente.mimeType,
+  );
+  // el error lo muestra la pantalla que se suscribe
+  subida.promise.catch(() => {});
+  return true;
 };
 
 // cancela/anula un procesamiento (el operador dueño, solo si esta pendiente o procesando)

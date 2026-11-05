@@ -19,12 +19,10 @@ import {
   crearConteo,
   getProcesamientosPorConteo,
   registrarProcesamiento,
-  subirVideoBackground,
-  cancelarProcesamiento,
+  guardarSubidaPendiente,
+  reanudarSubida,
 } from "../../../src/api/endpoints";
 import { Variedad, Conteo } from "../../../src/types";
-import * as SecureStore from "expo-secure-store";
-import { TOKEN_KEY } from "../../../src/api/client";
 
 const COLS = 10;
 const GRID_PADDING = 10;
@@ -66,12 +64,8 @@ export default function NuevoConteoScreen() {
   const [totalSurcos, setTotalSurcos] = useState(0);
   const [creandoNuevo, setCreandoNuevo] = useState(false);
 
-  //estado de la subida (barra visible y que se puede cancelar)
-  const [subiendo, setSubiendo] = useState(false);
-  const [progresoSubida, setProgresoSubida] = useState(0);
-  const cancelarSubidaRef = useState<{ fn: (() => Promise<void>) | null }>({
-    fn: null,
-  })[0];
+  // mientras registramos el video; la subida en si se ve y se cancela en la pantalla de procesamiento
+  const [iniciandoSubida, setIniciandoSubida] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -158,8 +152,7 @@ export default function NuevoConteoScreen() {
     }
 
     try {
-      setSubiendo(true);
-      setProgresoSubida(0);
+      setIniciandoSubida(true);
 
       //registramos el procesamiento en la BD
       const proc = await registrarProcesamiento({
@@ -169,77 +162,26 @@ export default function NuevoConteoScreen() {
         fecha_grabacion: new Date().toISOString(),
       });
 
-      const token = (await SecureStore.getItemAsync(TOKEN_KEY)) ?? "";
-
-      //arrancamos la subida en background (no esperamos la promise aca)
-      const subida = subirVideoBackground(
+      //anotamos el video antes de arrancar, asi se puede retomar aunque la app se cierre a medias
+      await guardarSubidaPendiente(
         proc.id,
         videoFile.uri,
-        token,
-        (pct) => setProgresoSubida(pct),
-        videoFile.mimeType ?? undefined,
+        videoFile.mimeType,
       );
-      cancelarSubidaRef.fn = subida.cancelar;
-
-      //guardamos el uri en AsyncStorage pa que procesamiento/[id] pueda retomar la subida si hace falta
-      const AsyncStorage = (
-        await import("@react-native-async-storage/async-storage")
-      ).default;
-      await AsyncStorage.setItem(
-        `subida:${proc.id}`,
-        JSON.stringify({
-          uri: videoFile.uri,
-          mimeType: videoFile.mimeType ?? null,
-        }),
-      );
+      await reanudarSubida(proc.id);
 
       //nos vamos de una a la pantalla de procesamiento, la subida sigue atras y se ve alla
-      setSubiendo(false);
-      cancelarSubidaRef.fn = null;
       router.replace({
         pathname: "/(app)/procesamiento/[id]",
-        params: {
-          id: String(proc.id),
-          subidaEnCurso: "1",
-        },
-      });
-
-      //manejamos el resultado atras sin bloquear la navegacion
-      subida.promise.catch(async (errSubida: any) => {
-        // si la subida falla despues de navegar, cancelamos el procesamiento pa que no quede colgado
-        try {
-          await cancelarProcesamiento(proc.id);
-          await AsyncStorage.removeItem(`subida:${proc.id}`);
-        } catch {
-          // da igual si falla la cancelacion
-        }
+        params: { id: String(proc.id) },
       });
     } catch (err: any) {
-      setSubiendo(false);
+      setIniciandoSubida(false);
       Alert.alert(
         "Error",
         err.response?.data?.detail ?? "No se pudo registrar el procesamiento.",
       );
     }
-  };
-
-  const handleCancelarSubida = () => {
-    Alert.alert(
-      "Cancelar subida",
-      "¿Seguro que deseas cancelar la subida del video?",
-      [
-        { text: "No", style: "cancel" },
-        {
-          text: "Sí, cancelar",
-          style: "destructive",
-          onPress: async () => {
-            if (cancelarSubidaRef.fn) {
-              await cancelarSubidaRef.fn();
-            }
-          },
-        },
-      ],
-    );
   };
 
   if (loadingConfig)
@@ -540,49 +482,27 @@ export default function NuevoConteoScreen() {
             </TouchableOpacity>
           </View>
 
-          {subiendo ? (
-            <View style={styles.subidaBox}>
-              <View style={styles.subidaHeader}>
-                <ActivityIndicator size="small" color="#2d6a4f" />
-                <Text style={styles.subidaTitle}>
-                  Subiendo video... {progresoSubida}%
-                </Text>
-              </View>
-              <View style={styles.barraTrack}>
-                <View
-                  style={[styles.barraFill, { width: `${progresoSubida}%` }]}
-                />
-              </View>
-              <Text style={styles.subidaHint}>Preparando la subida...</Text>
-              <TouchableOpacity
-                style={styles.btnCancelarSubida}
-                onPress={handleCancelarSubida}
-                activeOpacity={0.85}
-              >
-                <Ionicons
-                  name="close-circle-outline"
-                  size={16}
-                  color="#991b1b"
-                />
-                <Text style={styles.btnCancelarSubidaText}>
-                  Cancelar subida
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={[
-                styles.btnPrimary,
-                (!videoFile || !surcoInicio || !surcoFin) && styles.btnDisabled,
-              ]}
-              onPress={handleSubir}
-              disabled={!videoFile || !surcoInicio || !surcoFin}
-              activeOpacity={0.85}
-            >
+          <TouchableOpacity
+            style={[
+              styles.btnPrimary,
+              (!videoFile || !surcoInicio || !surcoFin || iniciandoSubida) &&
+                styles.btnDisabled,
+            ]}
+            onPress={handleSubir}
+            disabled={
+              !videoFile || !surcoInicio || !surcoFin || iniciandoSubida
+            }
+            activeOpacity={0.85}
+          >
+            {iniciandoSubida ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
               <Ionicons name="cloud-upload-outline" size={16} color="#fff" />
-              <Text style={styles.btnPrimaryText}>Subir y procesar con IA</Text>
-            </TouchableOpacity>
-          )}
+            )}
+            <Text style={styles.btnPrimaryText}>
+              {iniciandoSubida ? "Preparando..." : "Subir y procesar con IA"}
+            </Text>
+          </TouchableOpacity>
         </>
       )}
     </ScrollView>
@@ -744,38 +664,4 @@ const styles = StyleSheet.create({
   btnSecondaryText: { fontSize: 13, fontWeight: "600", color: "#5a7a6a" },
   btnBack: { flexDirection: "row", alignItems: "center", gap: 6, padding: 8 },
   btnBackText: { fontSize: 13, color: "#5a7a6a" },
-  subidaBox: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: "#dde8e2",
-    padding: 16,
-    gap: 12,
-  },
-  subidaHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
-  subidaTitle: { fontSize: 15, fontWeight: "700", color: "#1a2e25" },
-  barraTrack: {
-    height: 10,
-    borderRadius: 6,
-    backgroundColor: "#e8f0eb",
-    overflow: "hidden",
-  },
-  barraFill: {
-    height: "100%",
-    borderRadius: 6,
-    backgroundColor: "#2d6a4f",
-  },
-  subidaHint: { fontSize: 12, color: "#8fa898", lineHeight: 16 },
-  btnCancelarSubida: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 11,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: "#fca5a5",
-    backgroundColor: "#fee2e2",
-  },
-  btnCancelarSubidaText: { fontSize: 14, fontWeight: "700", color: "#991b1b" },
 });
