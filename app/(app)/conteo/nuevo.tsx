@@ -193,7 +193,7 @@ export default function NuevoConteoScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* PASO 1 — Configurar conteo */}
+      {/*Configurar conteo */}
       {paso === "configurar" && (
         <>
           <Text style={styles.stepLabel}>Paso 1 de 2 — Configurar conteo</Text>
@@ -336,7 +336,7 @@ export default function NuevoConteoScreen() {
         </>
       )}
 
-      {/* PASO 2 — Subir video */}
+      {/*Subir video */}
       {paso === "subir" && conteoSeleccionado && (
         <>
           <Text style={styles.stepLabel}>Paso 2 de 2 — Subir video</Text>
@@ -476,7 +476,7 @@ export default function NuevoConteoScreen() {
                     color="#8fa898"
                   />
                   <Text style={styles.videoPickerText}>Seleccionar video</Text>
-                  <Text style={styles.videoPickerHint}>MP4, MOV</Text>
+                  <Text style={styles.videoPickerHint}>MP4, MOV o AVI</Text>
                 </View>
               )}
             </TouchableOpacity>

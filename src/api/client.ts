@@ -24,7 +24,7 @@ client.interceptors.request.use(async (config: AxiosRequestConfig) => {
   return config as any;
 });
 
-// callback pa avisar que la sesion expiro sin importar AuthContext (asi evitamos un ciclo de imports)
+// callback pa avisar que la sesion expiro sin importar AuthContext (asi evito un ciclo de imports)
 let onSesionExpirada: (() => void) | null = null;
 
 export function registrarHandlerSesionExpirada(handler: () => void) {
