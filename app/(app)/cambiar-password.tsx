@@ -10,7 +10,47 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { cambiarPasswordPropia } from "../../src/api/endpoints";
+
+function CampoPassword({
+  value,
+  onChangeText,
+  placeholder,
+}: {
+  value: string;
+  onChangeText: (texto: string) => void;
+  placeholder: string;
+}) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <View style={styles.inputRow}>
+      <TextInput
+        style={styles.input}
+        value={value}
+        onChangeText={onChangeText}
+        secureTextEntry={!visible}
+        autoCapitalize="none"
+        placeholder={placeholder}
+        placeholderTextColor="#9aa8a0"
+      />
+      <TouchableOpacity
+        onPress={() => setVisible((v) => !v)}
+        style={styles.eyeBtn}
+        accessibilityLabel={
+          visible ? "Ocultar contraseña" : "Mostrar contraseña"
+        }
+      >
+        <Ionicons
+          name={visible ? "eye-off-outline" : "eye-outline"}
+          size={18}
+          color="#8fa898"
+        />
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 export default function CambiarPasswordScreen() {
   const [actual, setActual] = useState("");
@@ -53,33 +93,24 @@ export default function CambiarPasswordScreen() {
       keyboardShouldPersistTaps="handled"
     >
       <Text style={styles.label}>Contraseña actual</Text>
-      <TextInput
-        style={styles.input}
+      <CampoPassword
         value={actual}
         onChangeText={setActual}
-        secureTextEntry
         placeholder="Tu contraseña actual"
-        placeholderTextColor="#9aa8a0"
       />
 
       <Text style={styles.label}>Nueva contraseña</Text>
-      <TextInput
-        style={styles.input}
+      <CampoPassword
         value={nueva}
         onChangeText={setNueva}
-        secureTextEntry
         placeholder="Mínimo 6 caracteres"
-        placeholderTextColor="#9aa8a0"
       />
 
       <Text style={styles.label}>Confirmar nueva contraseña</Text>
-      <TextInput
-        style={styles.input}
+      <CampoPassword
         value={nueva2}
         onChangeText={setNueva2}
-        secureTextEntry
         placeholder="Repite la nueva contraseña"
-        placeholderTextColor="#9aa8a0"
       />
 
       <TouchableOpacity
@@ -109,16 +140,22 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.4,
   },
-  input: {
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
     borderColor: "#d7e0db",
     borderRadius: 10,
+    marginBottom: 8,
+  },
+  input: {
+    flex: 1,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
     color: "#1a2e25",
-    marginBottom: 8,
   },
+  eyeBtn: { padding: 4, marginRight: 8 },
   boton: {
     backgroundColor: "#2d6a4f",
     borderRadius: 10,
