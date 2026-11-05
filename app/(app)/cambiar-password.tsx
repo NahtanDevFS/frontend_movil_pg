@@ -12,6 +12,7 @@ import {
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { cambiarPasswordPropia } from "../../src/api/endpoints";
+import { useAuth } from "../../src/context/AuthContext";
 
 function CampoPassword({
   value,
@@ -53,6 +54,7 @@ function CampoPassword({
 }
 
 export default function CambiarPasswordScreen() {
+  const { marcarPasswordCambiada } = useAuth();
   const [actual, setActual] = useState("");
   const [nueva, setNueva] = useState("");
   const [nueva2, setNueva2] = useState("");
@@ -73,6 +75,7 @@ export default function CambiarPasswordScreen() {
     setGuardando(true);
     try {
       await cambiarPasswordPropia(actual, nueva);
+      marcarPasswordCambiada();
       Alert.alert("Listo", "Tu contraseña se actualizó correctamente.", [
         { text: "OK", onPress: () => router.back() },
       ]);

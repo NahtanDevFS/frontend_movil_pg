@@ -17,6 +17,7 @@ interface AuthContextType {
   loading: boolean;
   signIn: (nombre: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  marcarPasswordCambiada: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -24,6 +25,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   signIn: async () => {},
   signOut: async () => {},
+  marcarPasswordCambiada: () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -72,6 +74,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   };
 
+  // refresca el flag local pa que no siga saliendo el aviso de cambiar la contraseña
+  const marcarPasswordCambiada = () => {
+    setUser((prev) =>
+      prev ? { ...prev, debe_cambiar_password: false } : prev,
+    );
+  };
+
   // si cae un 401 en medio de la sesion, client.ts llama este handler pa limpiar el estado y mandar al login
   useEffect(() => {
     registrarHandlerSesionExpirada(() => {
@@ -81,7 +90,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
+    <AuthContext.Provider
+      value={{ user, loading, signIn, signOut, marcarPasswordCambiada }}
+    >
       {children}
     </AuthContext.Provider>
   );
