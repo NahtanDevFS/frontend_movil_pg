@@ -18,6 +18,7 @@ import * as SecureStore from "expo-secure-store";
 import {
   getProcesamiento,
   ajustarConteo,
+  editarSurcos,
   getConteo,
   getComparacionAnterior,
   getProgreso,
@@ -102,6 +103,10 @@ export default function ProcesamientoScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [guardandoAjuste, setGuardandoAjuste] = useState(false);
+  const [editandoSurcos, setEditandoSurcos] = useState(false);
+  const [surcoInicio, setSurcoInicio] = useState("");
+  const [surcoFin, setSurcoFin] = useState("");
+  const [guardandoSurcos, setGuardandoSurcos] = useState(false);
   const [descargando, setDescargando] = useState(false);
   const [progresoDescarga, setProgresoDescarga] = useState(0);
   const [cancelando, setCancelando] = useState(false);
@@ -243,6 +248,30 @@ export default function ProcesamientoScreen() {
       Alert.alert("Error", err.response?.data?.detail ?? "No se pudo guardar.");
     } finally {
       setGuardandoAjuste(false);
+    }
+  };
+
+  const handleGuardarSurcos = async () => {
+    const inicio = parseInt(surcoInicio);
+    const fin = parseInt(surcoFin);
+    if (isNaN(inicio) || isNaN(fin) || inicio < 1 || fin < inicio)
+      return Alert.alert(
+        "Rango inválido",
+        "El surco final debe ser mayor o igual al inicial.",
+      );
+    setGuardandoSurcos(true);
+    try {
+      await editarSurcos(procId, { surco_inicio: inicio, surco_fin: fin });
+      await cargar();
+      setEditandoSurcos(false);
+      Alert.alert("Surcos actualizados");
+    } catch (err: any) {
+      Alert.alert(
+        "Error",
+        err.response?.data?.detail ?? "No se pudieron actualizar los surcos.",
+      );
+    } finally {
+      setGuardandoSurcos(false);
     }
   };
 
@@ -695,6 +724,17 @@ export default function ProcesamientoScreen() {
           <Text style={styles.metricValue}>
             {proc.surco_inicio}–{proc.surco_fin}
           </Text>
+          {proc.conteo_estado_nombre !== "completado" && !editandoSurcos && (
+            <TouchableOpacity
+              onPress={() => {
+                setSurcoInicio(String(proc.surco_inicio));
+                setSurcoFin(String(proc.surco_fin));
+                setEditandoSurcos(true);
+              }}
+            >
+              <Text style={styles.linkEditar}>Editar</Text>
+            </TouchableOpacity>
+          )}
         </View>
         {!ocultarMetricasIa && resultado.promedio_confianza && (
           <View style={styles.metricItem}>
@@ -713,6 +753,58 @@ export default function ProcesamientoScreen() {
           </View>
         )}
       </View>
+
+      {/* Editar surcos */}
+      {editandoSurcos && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Editar surcos</Text>
+          <Text style={styles.sectionSub}>
+            Corrige los surcos que cubre este video. El conteo no cambia.
+          </Text>
+          <View style={styles.ajusteRow}>
+            <TextInput
+              style={[styles.input, { flex: 1 }]}
+              value={surcoInicio}
+              onChangeText={setSurcoInicio}
+              keyboardType="number-pad"
+              placeholder="Desde"
+              placeholderTextColor="#a0b5a8"
+            />
+            <TextInput
+              style={[styles.input, { flex: 1 }]}
+              value={surcoFin}
+              onChangeText={setSurcoFin}
+              keyboardType="number-pad"
+              placeholder="Hasta"
+              placeholderTextColor="#a0b5a8"
+            />
+          </View>
+          <View style={styles.ajusteRow}>
+            <TouchableOpacity
+              onPress={() => setEditandoSurcos(false)}
+              disabled={guardandoSurcos}
+              style={styles.btnCancelarSurcos}
+            >
+              <Text style={styles.btnCancelarSurcosText}>Cancelar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.btnSmall,
+                { flex: 1, alignItems: "center" },
+                guardandoSurcos && styles.btnDisabled,
+              ]}
+              onPress={handleGuardarSurcos}
+              disabled={guardandoSurcos}
+            >
+              {guardandoSurcos ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.btnSmallText}>Guardar</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Comparación */}
       {comparacion?.hay_historial && (
@@ -990,6 +1082,21 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   btnSmallText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  linkEditar: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#2d6a4f",
+    marginTop: 4,
+  },
+  btnCancelarSurcos: {
+    flex: 1,
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "#dde8e2",
+    borderRadius: 10,
+    paddingVertical: 12,
+  },
+  btnCancelarSurcosText: { color: "#5a7a6a", fontWeight: "700", fontSize: 14 },
   btnDisabled: { opacity: 0.5 },
   btnAction: {
     flexDirection: "row",

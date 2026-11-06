@@ -523,6 +523,17 @@ export const ajustarConteo = async (
   return res.data;
 };
 
+export const editarSurcos = async (
+  procesamientoId: number,
+  data: { surco_inicio: number; surco_fin: number },
+) => {
+  const res = await client.patch(
+    `/procesamientos/${procesamientoId}/surcos`,
+    data,
+  );
+  return res.data;
+};
+
 export const getVideoAnotadoUrl = (procesamientoId: number): string => {
   return `/procesamientos/${procesamientoId}/video-anotado`;
 };

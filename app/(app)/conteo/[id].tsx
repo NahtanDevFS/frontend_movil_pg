@@ -413,6 +413,22 @@ export default function ConteoDetalleScreen() {
         </table>`
         : "";
 
+      const conteoCompletado = conteo.estado_nombre === "completado";
+      const estadoHtml = `
+        <p style="margin:0 0 8px">
+          <span style="display:inline-block;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:700;background:${conteoCompletado ? "#d1fae5" : "#fff3cd"};color:${conteoCompletado ? "#065f46" : "#856404"}">
+            ${conteoCompletado ? "Completado" : "En progreso"}
+          </span>
+        </p>`;
+
+      // los videos sin resultado no salen en la tabla ni suman, hay que avisarlo pa que no parezca el total final
+      const sinResultado = procs.filter((p) => !p.resultado).length;
+      const sinResultadoHtml = sinResultado
+        ? `<p style="margin:8px 0 0;font-size:12px;color:#856404">
+            ${sinResultado === 1 ? "1 video sin resultado aún no está incluido" : `${sinResultado} videos sin resultado aún no están incluidos`} en este total.
+          </p>`
+        : "";
+
       const html = `<html><head><meta name="viewport" content="width=device-width"></head>
       <body style="font-family:sans-serif;padding:32px;color:#1a2e25;max-width:600px;margin:0 auto">
         <div style="page-break-inside:avoid;background:#2d6a4f;padding:20px;border-radius:10px;color:#fff;margin-bottom:24px">
@@ -420,11 +436,13 @@ export default function ConteoDetalleScreen() {
           <p style="margin:4px 0 0;opacity:0.7;font-size:12px">Sistema de Conteo Pre-cosecha · Amadeo Export S.A.</p>
         </div>
         <h2 style="color:#2d6a4f">Reporte de Conteo #${conteoId}</h2>
+        ${estadoHtml}
         <p style="color:#5a7a6a">${cultivo.nombre}${cultivo.municipio_nombre ? ' · <span style="text-transform:capitalize">' + cultivo.municipio_nombre + ", " + cultivo.departamento_nombre + "</span>" : ""}${cultivo.ubicacion ? " · " + cultivo.ubicacion : ""}</p>
         <div style="page-break-inside:avoid;background:#f4f7f5;border-radius:10px;padding:16px;margin:20px 0;text-align:center">
           <p style="margin:0;font-size:11px;color:#5a7a6a;text-transform:uppercase;letter-spacing:1px">Total acumulado</p>
           <p style="margin:4px 0;font-size:56px;font-weight:800;color:#2d6a4f">${conteo.conteo_total_acumulado.toLocaleString()}</p>
           <p style="margin:0;color:#5a7a6a">melones</p>
+          ${sinResultadoHtml}
         </div>
         ${confianzaHtml}
         ${comparacionHtml}
