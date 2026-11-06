@@ -418,7 +418,7 @@ export default function NuevoConteoScreen() {
                     color="#8fa898"
                   />
                   <Text style={styles.videoPickerText}>Seleccionar video</Text>
-                  <Text style={styles.videoPickerHint}>MP4, MOV o AVI</Text>
+                  <Text style={styles.videoPickerHint}>MP4 o MOV</Text>
                 </View>
               )}
             </TouchableOpacity>
