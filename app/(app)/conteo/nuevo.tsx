@@ -212,7 +212,7 @@ export default function NuevoConteoScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.conteoCardTitle}>Conteo #{c.id}</Text>
                     <Text style={styles.conteoCardSub}>
-                      {new Date(c.fecha_conteo).toLocaleDateString("es-GT")} ·{" "}
+                      {new Date(c.fecha_conteo + "T00:00:00").toLocaleDateString("es-GT")} ·{" "}
                       {c.conteo_total_acumulado.toLocaleString()} melones
                     </Text>
                   </View>
