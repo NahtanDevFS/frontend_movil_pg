@@ -787,7 +787,7 @@ export default function ProcesamientoScreen() {
               bloqueados={surcosOcupados}
               surcoInicio={surcoInicio}
               surcoFin={surcoFin}
-              margenLateral={32}
+              margenLateral={33}
             />
           )}
           <View style={styles.ajusteRow}>

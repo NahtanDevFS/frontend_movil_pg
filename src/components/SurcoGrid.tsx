@@ -2,6 +2,7 @@ import { Dimensions, ScrollView, StyleSheet, Text, View } from "react-native";
 
 const COLS = 10;
 const GRID_PADDING = 10;
+const BORDE = 1.5;
 const GAP = 3;
 const VISIBLE_ROWS = 4;
 
@@ -22,8 +23,14 @@ export default function SurcoGrid({
   surcoFin,
   margenLateral,
 }: Props) {
-  const ancho = Dimensions.get("window").width - margenLateral * 2;
-  const celda = Math.floor((ancho - GRID_PADDING * 2 - GAP * (COLS - 1)) / COLS);
+  const anchoInterior =
+    Dimensions.get("window").width -
+    margenLateral * 2 -
+    BORDE * 2 -
+    GRID_PADDING * 2;
+  const celda = Math.floor((anchoInterior - GAP * (COLS - 1)) / COLS);
+  // ancho exacto de las 10 columnas, pa que no se baje una fila y lo que sobre quede repartido
+  const anchoGrilla = celda * COLS + GAP * (COLS - 1);
   const altoMaximo =
     VISIBLE_ROWS * celda + (VISIBLE_ROWS - 1) * GAP + GRID_PADDING * 3;
   const inicio = parseInt(surcoInicio);
@@ -37,7 +44,7 @@ export default function SurcoGrid({
         nestedScrollEnabled
         showsVerticalScrollIndicator
       >
-        <View style={styles.grid}>
+        <View style={[styles.grid, { width: anchoGrilla }]}>
           {Array.from({ length: totalSurcos }, (_, i) => {
             const n = i + 1;
             const bloqueado = bloqueados.has(n);
@@ -84,11 +91,16 @@ const styles = StyleSheet.create({
   wrapper: {
     backgroundColor: "#fff",
     borderRadius: 10,
-    borderWidth: 1.5,
+    borderWidth: BORDE,
     borderColor: "#dde8e2",
   },
   content: { padding: GRID_PADDING },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: GAP },
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: GAP,
+    alignSelf: "center",
+  },
   cell: {
     borderRadius: 5,
     backgroundColor: "#e8eeeb",
