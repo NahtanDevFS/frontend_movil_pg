@@ -17,6 +17,7 @@ import * as Sharing from "expo-sharing";
 import * as SecureStore from "expo-secure-store";
 import {
   getProcesamiento,
+  getProcesamientosPorConteo,
   ajustarConteo,
   editarSurcos,
   getConteo,
@@ -30,6 +31,7 @@ import {
   MENSAJE_SUBIDA_CANCELADA,
 } from "../../../src/api/endpoints";
 import { TOKEN_KEY } from "../../../src/api/client";
+import SurcoGrid from "../../../src/components/SurcoGrid";
 import {
   haySubidaActiva,
   ProgresoSubida,
@@ -106,6 +108,10 @@ export default function ProcesamientoScreen() {
   const [editandoSurcos, setEditandoSurcos] = useState(false);
   const [surcoInicio, setSurcoInicio] = useState("");
   const [surcoFin, setSurcoFin] = useState("");
+  // surcos de los demas videos, null mientras no se han podido cargar
+  const [surcosOcupados, setSurcosOcupados] = useState<Set<number> | null>(
+    null,
+  );
   const [guardandoSurcos, setGuardandoSurcos] = useState(false);
   const [descargando, setDescargando] = useState(false);
   const [progresoDescarga, setProgresoDescarga] = useState(0);
@@ -248,6 +254,26 @@ export default function ProcesamientoScreen() {
       Alert.alert("Error", err.response?.data?.detail ?? "No se pudo guardar.");
     } finally {
       setGuardandoAjuste(false);
+    }
+  };
+
+  const abrirEditorSurcos = async () => {
+    if (!proc) return;
+    setSurcoInicio(String(proc.surco_inicio));
+    setSurcoFin(String(proc.surco_fin));
+    setSurcosOcupados(null);
+    setEditandoSurcos(true);
+    try {
+      const procs = await getProcesamientosPorConteo(proc.conteo_id);
+      const ocupados = new Set<number>();
+      procs
+        .filter((p) => p.id !== proc.id)
+        .forEach((p) => {
+          for (let s = p.surco_inicio; s <= p.surco_fin; s++) ocupados.add(s);
+        });
+      setSurcosOcupados(ocupados);
+    } catch {
+      // sin la grilla se puede editar igual, el backend valida los solapes
     }
   };
 
@@ -725,13 +751,7 @@ export default function ProcesamientoScreen() {
             {proc.surco_inicio}–{proc.surco_fin}
           </Text>
           {proc.conteo_estado_nombre !== "completado" && !editandoSurcos && (
-            <TouchableOpacity
-              onPress={() => {
-                setSurcoInicio(String(proc.surco_inicio));
-                setSurcoFin(String(proc.surco_fin));
-                setEditandoSurcos(true);
-              }}
-            >
+            <TouchableOpacity onPress={abrirEditorSurcos}>
               <Text style={styles.linkEditar}>Editar</Text>
             </TouchableOpacity>
           )}
@@ -761,6 +781,15 @@ export default function ProcesamientoScreen() {
           <Text style={styles.sectionSub}>
             Corrige los surcos que cubre este video. El conteo no cambia.
           </Text>
+          {conteo && surcosOcupados && (
+            <SurcoGrid
+              totalSurcos={conteo.total_surcos}
+              bloqueados={surcosOcupados}
+              surcoInicio={surcoInicio}
+              surcoFin={surcoFin}
+              margenLateral={32}
+            />
+          )}
           <View style={styles.ajusteRow}>
             <TextInput
               style={[styles.input, { flex: 1 }]}

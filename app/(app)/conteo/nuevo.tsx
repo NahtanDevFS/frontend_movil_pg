@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
-  Dimensions,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -23,19 +22,7 @@ import {
   reanudarSubida,
 } from "../../../src/api/endpoints";
 import { Variedad, Conteo } from "../../../src/types";
-
-const COLS = 10;
-const GRID_PADDING = 10;
-const GAP = 3;
-const SCREEN_WIDTH = Dimensions.get("window").width;
-const CONTENT_PADDING = 20;
-const GRID_WIDTH = SCREEN_WIDTH - CONTENT_PADDING * 2;
-const CELL_SIZE = Math.floor(
-  (GRID_WIDTH - GRID_PADDING * 2 - GAP * (COLS - 1)) / COLS,
-);
-const VISIBLE_ROWS = 4;
-const MAX_GRID_HEIGHT =
-  VISIBLE_ROWS * CELL_SIZE + (VISIBLE_ROWS - 1) * GAP + GRID_PADDING * 3;
+import SurcoGrid from "../../../src/components/SurcoGrid";
 
 export default function NuevoConteoScreen() {
   const router = useRouter();
@@ -352,58 +339,13 @@ export default function NuevoConteoScreen() {
 
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Cobertura de surcos</Text>
-            <ScrollView
-              style={[styles.surcoGridWrapper, { maxHeight: MAX_GRID_HEIGHT }]}
-              contentContainerStyle={styles.surcoGridContent}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator
-            >
-              <View style={styles.surcoGrid}>
-                {Array.from({ length: totalSurcos }, (_, i) => {
-                  const n = i + 1;
-                  const bloqueado = surcosBloqueados.has(n);
-                  const inicio = parseInt(surcoInicio);
-                  const fin = parseInt(surcoFin);
-                  const enRango =
-                    !isNaN(inicio) && !isNaN(fin) && n >= inicio && n <= fin;
-                  const conflicto = bloqueado && enRango;
-                  return (
-                    <View
-                      key={n}
-                      style={[
-                        styles.surcoCell,
-                        bloqueado && !conflicto && styles.surcoCubierto,
-                        enRango && !conflicto && styles.surcoRango,
-                        conflicto && styles.surcoConflicto,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.surcoCellText,
-                          (bloqueado || enRango) && styles.surcoCellTextActive,
-                        ]}
-                      >
-                        {n}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </ScrollView>
-            <View style={styles.surcoLegend}>
-              <View
-                style={[styles.legendDot, { backgroundColor: "#b7e4c7" }]}
-              />
-              <Text style={styles.legendText}>Cubierto</Text>
-              <View
-                style={[styles.legendDot, { backgroundColor: "#dcfce7" }]}
-              />
-              <Text style={styles.legendText}>Selección</Text>
-              <View
-                style={[styles.legendDot, { backgroundColor: "#fca5a5" }]}
-              />
-              <Text style={styles.legendText}>Conflicto</Text>
-            </View>
+            <SurcoGrid
+              totalSurcos={totalSurcos}
+              bloqueados={surcosBloqueados}
+              surcoInicio={surcoInicio}
+              surcoFin={surcoFin}
+              margenLateral={20}
+            />
           </View>
 
           <View style={styles.fieldGroup}>
@@ -576,37 +518,6 @@ const styles = StyleSheet.create({
   },
   conteoInfoLabel: { color: "#fff", fontWeight: "700", fontSize: 14 },
   conteoInfoSub: { color: "rgba(255,255,255,0.7)", fontSize: 12 },
-  surcoGridWrapper: {
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: "#dde8e2",
-  },
-  surcoGridContent: { padding: GRID_PADDING },
-  surcoGrid: { flexDirection: "row", flexWrap: "wrap", gap: GAP },
-  surcoCell: {
-    width: CELL_SIZE,
-    height: CELL_SIZE,
-    borderRadius: 5,
-    backgroundColor: "#e8eeeb",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#dde8e2",
-  },
-  surcoCubierto: { backgroundColor: "#b7e4c7", borderColor: "#52b788" },
-  surcoRango: { backgroundColor: "#dcfce7", borderColor: "#86efac" },
-  surcoConflicto: { backgroundColor: "#fee2e2", borderColor: "#fca5a5" },
-  surcoCellText: { fontSize: 8, fontWeight: "600", color: "#8fa898" },
-  surcoCellTextActive: { color: "#1a2e25" },
-  surcoLegend: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 4,
-  },
-  legendDot: { width: 10, height: 10, borderRadius: 3 },
-  legendText: { fontSize: 11, color: "#8fa898", marginRight: 8 },
   rangoRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   rangoField: { flex: 1, gap: 6 },
   rangoLabel: { fontSize: 12, fontWeight: "600", color: "#5a7a6a" },
