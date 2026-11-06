@@ -429,8 +429,8 @@ export default function ConteoDetalleScreen() {
           </p>`
         : "";
 
-      const html = `<html><head><meta name="viewport" content="width=device-width"></head>
-      <body style="font-family:sans-serif;padding:32px;color:#1a2e25;max-width:600px;margin:0 auto">
+      const html = `<html><head><meta name="viewport" content="width=device-width"><style>@page{margin:32px 0}</style></head>
+      <body style="font-family:sans-serif;padding:0 32px;color:#1a2e25;max-width:600px;margin:0 auto">
         <div style="page-break-inside:avoid;background:#2d6a4f;padding:20px;border-radius:10px;color:#fff;margin-bottom:24px">
           <h1 style="margin:0">MelonCount</h1>
           <p style="margin:4px 0 0;opacity:0.7;font-size:12px">Sistema de Conteo Pre-cosecha · Amadeo Export S.A.</p>
